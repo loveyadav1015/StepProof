@@ -9,7 +9,9 @@ import time
 from pathlib import Path
 
 from stepproof.cache import SQLiteCache
+from stepproof.calibration import profile_video_evidence
 from stepproof.config import settings
+from stepproof.evaluation import run_evaluation
 from stepproof.ingest.sampler import sample_video
 from stepproof.pipeline.checker import StepChecker
 from stepproof.pipeline.grounding import ground_step_objects
@@ -187,6 +189,59 @@ def cmd_replay(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_calibrate(args: argparse.Namespace) -> int:
+    """Sample video and print per-step object evidence statistics for threshold calibration."""
+    video_path = Path(args.video)
+    sop_path = Path(args.sop)
+
+    if not sop_path.exists():
+        logger.error("SOP file not found: %s", sop_path)
+        return 1
+
+    sop = SOP.model_validate_json(sop_path.read_text(encoding="utf-8"))
+    seg = get_seg_provider(settings.stepproof_seg, require_meta=args.require_meta)
+
+    print("=" * 85)
+    print(f"STEPPROOF EVIDENCE CALIBRATION: {video_path.name}")
+    print(f"Task: {sop.task} | Total Steps: {len(sop.steps)}")
+    print("=" * 85)
+
+    stats = profile_video_evidence(video_path, sop, seg)
+
+    for step_id, info in stats.items():
+        print(f"\n[Step {step_id}] {info['instruction']}")
+        print(f"{'Object':<16} | {'Seen/Total':<10} | {'Area (min/avg/max)':<20} | {'Conf (min/avg)':<14} | Recommended (Area, Conf)")
+        print("-" * 85)
+        for obj_name, s in info["objects"].items():
+            seen_str = f"{s['frames_detected']}/{s['total_frames']}"
+            area_str = f"{s['min_area']}/{s['avg_area']}/{s['max_area']}"
+            conf_str = f"{s['min_conf']:.2f}/{s['avg_conf']:.2f}"
+            rec_str = f"min_area >= {s['recommended_min_area']}px, conf >= {s['recommended_min_conf']:.2f}"
+            print(f"{obj_name:<16} | {seen_str:<10} | {area_str:<20} | {conf_str:<14} | {rec_str}")
+
+    print("\n" + "=" * 85)
+    print("✅ Calibration profiling complete! Edit 'calibration.yaml' to update thresholds.")
+    print("=" * 85 + "\n")
+    return 0
+
+
+def cmd_eval(args: argparse.Namespace) -> int:
+    """Run batch verification evaluation against a manifest."""
+    manifest_path = Path(args.manifest)
+    out_report = args.out or "eval_report.md"
+
+    try:
+        run_evaluation(
+            manifest_path=manifest_path,
+            output_report_path=out_report,
+            require_meta=args.require_meta,
+        )
+        return 0
+    except Exception as e:
+        logger.error("Evaluation failed: %s", e)
+        return 1
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Construct CLI argument parser."""
     parser = argparse.ArgumentParser(
@@ -217,6 +272,18 @@ def build_parser() -> argparse.ArgumentParser:
     p_check.add_argument("--mode", default=None, choices=["live", "cache_only", "refresh"])
     p_check.add_argument("--require-meta", action="store_true", help="Enforce Meta compliance guard")
 
+    # calibrate
+    p_cal = subparsers.add_parser("calibrate", help="Profile per-step evidence stats for threshold tuning")
+    p_cal.add_argument("video", help="Path to demonstration video")
+    p_cal.add_argument("--sop", required=True, help="Path to golden sop.json")
+    p_cal.add_argument("--require-meta", action="store_true", help="Enforce Meta compliance guard")
+
+    # eval
+    p_eval = subparsers.add_parser("eval", help="Run batch evaluation against manifest")
+    p_eval.add_argument("manifest", help="Path to manifest YAML file")
+    p_eval.add_argument("--out", default="eval_report.md", help="Output path for evaluation report")
+    p_eval.add_argument("--require-meta", action="store_true", help="Enforce Meta compliance guard")
+
     # report
     p_report = subparsers.add_parser("report", help="Export or display Markdown report")
     p_report.add_argument("run_dir", help="Path to run output directory containing report.json")
@@ -238,6 +305,8 @@ def main() -> int:
         "build-sop": cmd_build_sop,
         "ground": cmd_ground,
         "check": cmd_check,
+        "calibrate": cmd_calibrate,
+        "eval": cmd_eval,
         "report": cmd_report,
         "replay": cmd_replay,
     }

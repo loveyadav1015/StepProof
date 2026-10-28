@@ -7,6 +7,7 @@ from typing import Any, Callable, Literal, Optional, TypeVar
 
 from pydantic import BaseModel, Field, ValidationError
 
+from stepproof.json_repair import repair_json
 from stepproof.provenance import ProvenanceRecord
 
 logger = logging.getLogger(__name__)
@@ -127,10 +128,16 @@ def validate_with_retry(
         try:
             if isinstance(raw_data, model_cls):
                 return raw_data
+            if model_cls is dict and isinstance(raw_data, dict):
+                return raw_data  # type: ignore
             if isinstance(raw_data, dict):
                 return model_cls.model_validate(raw_data)
             if isinstance(raw_data, str):
-                return model_cls.model_validate_json(raw_data)
+                repaired = repair_json(raw_data)
+                if model_cls is dict:
+                    import json
+                    return json.loads(repaired)  # type: ignore
+                return model_cls.model_validate_json(repaired)
             return model_cls.model_validate(raw_data)
         except ValidationError as e:
             attempts += 1

@@ -75,8 +75,9 @@ def test_seg_local_sam_missing_weights_raises():
 
 
 def test_seg_meta_api_with_fixture(monkeypatch):
-    from pathlib import Path
     import json
+    from pathlib import Path
+
     from stepproof.providers.seg_meta_api import parse_sam_output_text
 
     fixture_path = Path("tests/fixtures/sam_stream_fixture.txt")
@@ -139,6 +140,7 @@ def test_factory_requires_meta_guard():
 
 def test_llm_openai_compat_chat_style(monkeypatch):
     from unittest.mock import MagicMock
+
     from stepproof.providers.llm_openai_compat import LLMOpenAICompatProvider
 
     provider = LLMOpenAICompatProvider(
@@ -169,6 +171,7 @@ def test_llm_openai_compat_chat_style(monkeypatch):
 
 def test_llm_openai_compat_responses_style(monkeypatch):
     from unittest.mock import MagicMock
+
     from stepproof.providers.llm_openai_compat import LLMOpenAICompatProvider
 
     provider = LLMOpenAICompatProvider(

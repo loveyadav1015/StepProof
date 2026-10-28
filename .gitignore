@@ -69,3 +69,8 @@ checkpoints/
 .idea/
 .vscode/
 *.swp
+
+
+.agents
+skills-lock.json
+artifacts/

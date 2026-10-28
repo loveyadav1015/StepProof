@@ -26,8 +26,8 @@ import numpy as np
 repo_root = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(repo_root / "src"))
 
-from stepproof.config import settings
-from stepproof.providers.llm_openai_compat import LLMOpenAICompatProvider
+from stepproof.config import settings  # noqa: E402
+from stepproof.providers.llm_openai_compat import LLMOpenAICompatProvider  # noqa: E402
 
 
 def get_test_image() -> np.ndarray:

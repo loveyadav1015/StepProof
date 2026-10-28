@@ -1,0 +1,29 @@
+# StepProof Evaluation Manifest - Real Footage Template
+# Fill in paths to your filmed learner videos and expected outcomes.
+
+name: "Physical Assembly Task Verification"
+sop: "data/outputs/golden_sop.json"
+
+runs:
+  - scenario: "Learner 1 - Baseline Correct"
+    video: "data/learner/real_learner_01.mp4"
+    expected_flagged_step_ids: []
+    expected_primary_flag_types: {}
+
+  - scenario: "Learner 2 - Staged Skipped Step"
+    video: "data/learner/real_learner_02.mp4"
+    expected_flagged_step_ids: [2]
+    expected_primary_flag_types:
+      2: "skipped"
+
+  - scenario: "Learner 3 - Staged Wrong Component"
+    video: "data/learner/real_learner_03.mp4"
+    expected_flagged_step_ids: [3]
+    expected_primary_flag_types:
+      3: "wrong"
+
+  - scenario: "Learner 4 - Staged Out-of-Order Execution"
+    video: "data/learner/real_learner_04.mp4"
+    expected_flagged_step_ids: [2]
+    expected_primary_flag_types:
+      2: "out_of_order"

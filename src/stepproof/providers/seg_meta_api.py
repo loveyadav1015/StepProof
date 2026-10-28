@@ -9,12 +9,10 @@ import os
 import re
 import time
 from pathlib import Path
-from typing import Any
 
 import cv2
 import httpx
 import numpy as np
-
 from meta_sam_parser import SegmentationMask
 from meta_sam_parser._mask_codec import decode_mask_to_raster
 

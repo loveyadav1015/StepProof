@@ -76,6 +76,10 @@ class ProvenanceRecord(BaseModel):
         default=False,
         description="True ONLY for Meta Model API, Muse Open weights, and SAM 3.1",
     )
+    input_tokens: int = Field(default=0, description="Real input/prompt token count")
+    output_tokens: int = Field(default=0, description="Real output/completion token count")
+    total_tokens: int = Field(default=0, description="Real total token count")
+    cost_usd: float = Field(default=0.0, description="Calculated inference cost in USD")
 
     @property
     def badge(self) -> str:
@@ -88,6 +92,9 @@ def create_provenance(
     model_name: str,
     base_url: str = "",
     meta_compliant: bool | None = None,
+    input_tokens: int = 0,
+    output_tokens: int = 0,
+    cost_usd: float = 0.0,
 ) -> ProvenanceRecord:
     """Factory helper to create a verified ProvenanceRecord."""
     host = "local"
@@ -111,6 +118,10 @@ def create_provenance(
         base_url_host=host,
         timestamp=datetime.now(timezone.utc).isoformat(),
         meta_compliant=meta_compliant,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        total_tokens=input_tokens + output_tokens,
+        cost_usd=cost_usd,
     )
 
 

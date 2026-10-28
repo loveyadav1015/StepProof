@@ -19,7 +19,7 @@ import numpy as np
 repo_root = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(repo_root / "src"))
 
-from stepproof.providers.seg_meta_api import SegMetaAPIProvider
+from stepproof.providers.seg_meta_api import SegMetaAPIProvider  # noqa: E402
 
 
 def get_test_image() -> np.ndarray:

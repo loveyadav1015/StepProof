@@ -1,0 +1,30 @@
+# StepProof Calibration Configuration
+# Per-object thresholds for segmentation, grounding, and verification rules
+
+default:
+  min_mask_area_px: 200
+  min_confidence: 0.50
+  expected_count: 1
+  position_tolerance_px: 20
+
+objects:
+  "red block":
+    min_mask_area_px: 500
+    min_confidence: 0.80
+    expected_count: 1
+    position_tolerance_px: 15
+  "green block":
+    min_mask_area_px: 500
+    min_confidence: 0.80
+    expected_count: 1
+    position_tolerance_px: 15
+  "blue block":
+    min_mask_area_px: 500
+    min_confidence: 0.80
+    expected_count: 1
+    position_tolerance_px: 15
+  "yellow block":
+    min_mask_area_px: 500
+    min_confidence: 0.80
+    expected_count: 1
+    position_tolerance_px: 15

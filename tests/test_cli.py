@@ -79,3 +79,36 @@ def test_cli_end_to_end_smoke(synthetic_videos, monkeypatch):
             ["stepproof", "replay", str(run_dir), "--require-meta"],
         )
         assert main() == 1
+
+
+def test_cli_calibrate_and_eval(synthetic_videos, monkeypatch):
+    expert_video = str(synthetic_videos["expert"])
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp_path = Path(tmpdir)
+        sop_path = tmp_path / "sop.json"
+        eval_report_path = tmp_path / "test_eval_report.md"
+
+        # Build SOP first
+        monkeypatch.setattr(
+            "sys.argv",
+            ["stepproof", "build-sop", expert_video, "--out", str(sop_path)],
+        )
+        assert main() == 0
+
+        # Calibrate
+        monkeypatch.setattr(
+            "sys.argv",
+            ["stepproof", "calibrate", expert_video, "--sop", str(sop_path)],
+        )
+        assert main() == 0
+
+        # Eval
+        manifest_path = "manifests/synthetic_manifest.yaml"
+        monkeypatch.setattr(
+            "sys.argv",
+            ["stepproof", "eval", manifest_path, "--out", str(eval_report_path)],
+        )
+        assert main() == 0
+        assert eval_report_path.exists()
+        assert "EVALUATION REPORT" in eval_report_path.read_text().upper()

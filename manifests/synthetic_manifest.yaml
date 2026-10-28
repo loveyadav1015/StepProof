@@ -1,0 +1,27 @@
+# StepProof Evaluation Manifest - Synthetic Test Suite
+name: "Synthetic Block Assembly Verification Suite"
+sop: "data/outputs/demo_sop.json"
+
+runs:
+  - scenario: "Correct Sequence Execution"
+    video: "data/learner/learner_correct.mp4"
+    expected_flagged_step_ids: []
+    expected_primary_flag_types: {}
+
+  - scenario: "Step 2 Skipped (Missing Green Block)"
+    video: "data/learner/learner_skipped.mp4"
+    expected_flagged_step_ids: [2]
+    expected_primary_flag_types:
+      2: "skipped"
+
+  - scenario: "Step 2 Wrong Part (Purple Block)"
+    video: "data/learner/learner_wrong_part.mp4"
+    expected_flagged_step_ids: [2]
+    expected_primary_flag_types:
+      2: "wrong"
+
+  - scenario: "Step 2 Out-of-Order (Blue Placed First)"
+    video: "data/learner/learner_out_of_order.mp4"
+    expected_flagged_step_ids: [2]
+    expected_primary_flag_types:
+      2: "out_of_order"
