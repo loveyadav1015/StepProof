@@ -1,0 +1,105 @@
+"""Tests for LLM and Segmentation providers, stubs, and factory."""
+
+import cv2
+import numpy as np
+import pytest
+
+from stepproof.providers.factory import get_llm_provider, get_seg_provider
+from stepproof.providers.llm_mock import LLMMockProvider
+from stepproof.providers.seg_local_sam import SegLocalSAMProvider
+from stepproof.providers.seg_meta_api import SegMetaAPIProvider
+from stepproof.providers.seg_mock import SegMockProvider
+from stepproof.schemas import Check, Evidence, Step
+
+
+def test_mock_llm_generate_and_judge():
+    provider = LLMMockProvider()
+    assert not provider.get_provenance().meta_compliant
+
+    dummy_frame = np.zeros((100, 100, 3), dtype=np.uint8)
+    sop, prov = provider.generate_sop([dummy_frame], prompt="Generate SOP")
+    assert len(sop.steps) == 4
+    assert sop.steps[0].instruction.startswith("Place the red block")
+    assert prov.provider == "mock"
+
+    # Test judge_step when evidence matches
+    step1 = sop.steps[0]
+    ev_present = [
+        Evidence(
+            step_id=1,
+            frame_index=1,
+            timestamp_s=1.0,
+            object="red block",
+            count=1,
+            mask_area_px=500,
+            bbox=[10, 10, 50, 50],
+            confidence=0.99,
+        )
+    ]
+    verdict, _ = provider.judge_step(dummy_frame, step1, ev_present)
+    assert verdict["passed"] is True
+
+    # Test judge_step when evidence is missing
+    verdict_fail, _ = provider.judge_step(dummy_frame, step1, [])
+    assert verdict_fail["passed"] is False
+    assert len(verdict_fail["failed_rules"]) > 0
+
+
+def test_mock_seg_color_contour_detection():
+    seg = SegMockProvider()
+    assert not seg.get_provenance().meta_compliant
+
+    # Create synthetic frame with a 40x40 green block
+    img = np.zeros((200, 200, 3), dtype=np.uint8)
+    # Green in BGR is (0, 255, 0)
+    cv2.rectangle(img, (50, 50), (90, 90), (0, 255, 0), -1)
+
+    ev_green, prov = seg.find(img, "green block", step_id=1, frame_index=0)
+    assert len(ev_green) == 1
+    assert ev_green[0].mask_area_px >= 1000
+    assert ev_green[0].bbox[2] >= 35  # width
+    assert ev_green[0].bbox[3] >= 35  # height
+
+    # Red block should not be found in pure green image
+    ev_red, _ = seg.find(img, "red block")
+    assert len(ev_red) == 0
+
+
+def test_seg_local_sam_stub_raises():
+    sam = SegLocalSAMProvider()
+    assert sam.get_provenance().meta_compliant is True
+    dummy_frame = np.zeros((100, 100, 3), dtype=np.uint8)
+    with pytest.raises(NotImplementedError) as exc_info:
+        sam.find(dummy_frame, "resistor")
+    assert "SegLocalSAMProvider is a stub" in str(exc_info.value)
+
+
+def test_seg_meta_api_stub_raises():
+    meta = SegMetaAPIProvider()
+    assert meta.get_provenance().meta_compliant is True
+    dummy_frame = np.zeros((100, 100, 3), dtype=np.uint8)
+    with pytest.raises(NotImplementedError) as exc_info:
+        meta.find(dummy_frame, "breadboard")
+    assert "SegMetaAPIProvider is a stub" in str(exc_info.value)
+
+
+def test_factory_requires_meta_guard():
+    # In dev mode, mock is fine
+    llm = get_llm_provider("mock", require_meta=False)
+    assert isinstance(llm, LLMMockProvider)
+
+    # When require_meta=True, mock must be refused!
+    with pytest.raises(RuntimeError) as exc_info:
+        get_llm_provider("mock", require_meta=True)
+    assert "refuses non-Meta models" in str(exc_info.value)
+
+    # Segmentation mock also refused when require_meta=True
+    with pytest.raises(RuntimeError):
+        get_seg_provider("mock", require_meta=True)
+
+    # Local SAM and Meta API pass the require_meta guard because they are Meta compliant
+    seg_sam = get_seg_provider("local_sam", require_meta=True)
+    assert isinstance(seg_sam, SegLocalSAMProvider)
+
+    seg_api = get_seg_provider("meta_api", require_meta=True)
+    assert isinstance(seg_api, SegMetaAPIProvider)
