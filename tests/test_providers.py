@@ -9,7 +9,7 @@ from stepproof.providers.llm_mock import LLMMockProvider
 from stepproof.providers.seg_local_sam import SegLocalSAMProvider
 from stepproof.providers.seg_meta_api import SegMetaAPIProvider
 from stepproof.providers.seg_mock import SegMockProvider
-from stepproof.schemas import Check, Evidence, Step
+from stepproof.schemas import Evidence
 
 
 def test_mock_llm_generate_and_judge():

@@ -2,6 +2,7 @@
 
 import tempfile
 from pathlib import Path
+
 import pytest
 
 from scripts.make_synthetic_video import generate_all_synthetic_videos

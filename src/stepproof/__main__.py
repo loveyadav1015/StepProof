@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import json
 import logging
 import sys
 import time
@@ -18,7 +17,7 @@ from stepproof.pipeline.report import export_report, generate_markdown_report
 from stepproof.pipeline.sop_builder import build_sop
 from stepproof.provenance import assert_meta_compliant
 from stepproof.providers.factory import get_llm_provider, get_seg_provider
-from stepproof.schemas import RunReport, SOP
+from stepproof.schemas import SOP, RunReport
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger("stepproof")
@@ -114,7 +113,7 @@ def cmd_check(args: argparse.Namespace) -> int:
     provenance_list = [segmenter.get_provenance(), llm_judge.get_provenance()]
     timings = {"ingest": round(t_ingest, 2), "check": round(t_check, 2)}
 
-    report = export_report(
+    export_report(
         sop_id=sop.task,
         verdicts=verdicts,
         provenance=provenance_list,

@@ -5,10 +5,11 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any, Union
+
 import numpy as np
 
 from stepproof.provenance import ProvenanceRecord
-from stepproof.schemas import Evidence, SOP, Step
+from stepproof.schemas import SOP, Evidence, Step
 
 # Image input can be a filesystem Path, raw bytes, or a numpy array (cv2 BGR image)
 ImageInput = Union[Path, str, bytes, np.ndarray]

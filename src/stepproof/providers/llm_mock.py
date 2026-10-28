@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from typing import Any
+
 from stepproof.provenance import ProvenanceRecord, create_provenance
 from stepproof.providers.base import ImageInput, LLMProvider
-from stepproof.schemas import Check, Evidence, SOP, Step
+from stepproof.schemas import SOP, Check, Evidence, Step
 
 
 class LLMMockProvider(LLMProvider):

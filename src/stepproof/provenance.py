@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from urllib.parse import urlparse
-from pydantic import BaseModel, Field
 
+from pydantic import BaseModel, Field
 
 # Canonical set of recognized Meta model identifiers and families
 META_MODEL_PREFIXES = (

@@ -5,12 +5,13 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
+
 import cv2
 
 from stepproof.ingest.sampler import FrameInfo, SampledVideo
 from stepproof.provenance import ProvenanceRecord
 from stepproof.providers.base import SegmentationProvider
-from stepproof.schemas import Evidence, SOP, Step
+from stepproof.schemas import SOP, Evidence, Step
 
 logger = logging.getLogger(__name__)
 

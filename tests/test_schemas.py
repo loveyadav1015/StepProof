@@ -4,16 +4,14 @@ import pytest
 from pydantic import ValidationError
 
 from stepproof.provenance import (
-    ProvenanceRecord,
     assert_meta_compliant,
     create_provenance,
-    evaluate_meta_compliance,
 )
 from stepproof.schemas import (
+    SOP,
     Check,
     Evidence,
     RunReport,
-    SOP,
     Step,
     StepVerdict,
     validate_with_retry,

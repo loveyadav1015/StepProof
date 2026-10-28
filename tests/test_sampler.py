@@ -1,12 +1,12 @@
 """Tests for video ingest sampler and ffmpeg dependency checks."""
 
-from pathlib import Path
 import tempfile
+from pathlib import Path
+
 import pytest
 
 from stepproof.ingest.sampler import (
     check_ffmpeg_installed,
-    compute_file_hash,
     sample_video,
 )
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from typing import Any, Callable, Literal, Optional, TypeVar
+
 from pydantic import BaseModel, Field, ValidationError
 
 from stepproof.provenance import ProvenanceRecord

@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import json
 import logging
 from pathlib import Path
+
 from stepproof.cache import SQLiteCache
 from stepproof.config import settings
 from stepproof.ingest.sampler import SampledVideo

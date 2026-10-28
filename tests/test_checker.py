@@ -1,13 +1,11 @@
 """Tests for step state machine checker under all failure and pass scenarios."""
 
-import tempfile
-from pathlib import Path
 import pytest
 
 from stepproof.pipeline.checker import StepChecker
 from stepproof.providers.llm_mock import LLMMockProvider
 from stepproof.providers.seg_mock import SegMockProvider
-from stepproof.schemas import Check, Evidence, SOP, Step
+from stepproof.schemas import SOP, Check, Evidence, Step
 
 
 @pytest.fixture

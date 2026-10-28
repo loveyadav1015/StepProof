@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
+
 import streamlit as st
 
 from stepproof.cache import SQLiteCache
@@ -15,7 +15,7 @@ from stepproof.pipeline.report import export_report, generate_markdown_report
 from stepproof.pipeline.sop_builder import build_sop
 from stepproof.provenance import assert_meta_compliant
 from stepproof.providers.factory import get_llm_provider, get_seg_provider
-from stepproof.schemas import RunReport, SOP
+from stepproof.schemas import SOP, RunReport
 
 st.set_page_config(
     page_title="StepProof | Video SOP & Execution Verification",

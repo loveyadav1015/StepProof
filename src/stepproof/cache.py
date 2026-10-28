@@ -5,9 +5,10 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-from pathlib import Path
 import sqlite3
+from pathlib import Path
 from typing import Any, Callable
+
 from stepproof.config import settings
 from stepproof.provenance import ProvenanceRecord, assert_meta_compliant
 

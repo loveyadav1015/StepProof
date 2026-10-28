@@ -4,14 +4,13 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any, Optional
+from typing import Optional
+
 import cv2
-import numpy as np
 
 from stepproof.ingest.sampler import FrameInfo
-from stepproof.provenance import ProvenanceRecord
 from stepproof.providers.base import LLMProvider, SegmentationProvider
-from stepproof.schemas import Check, Evidence, FlagType, SOP, Step, StepState, StepVerdict
+from stepproof.schemas import SOP, Evidence, FlagType, Step, StepState, StepVerdict
 
 logger = logging.getLogger(__name__)
 

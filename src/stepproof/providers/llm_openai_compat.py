@@ -8,6 +8,7 @@ import logging
 import os
 from pathlib import Path
 from typing import Any
+
 import cv2
 import httpx
 import numpy as np
@@ -15,7 +16,7 @@ from openai import OpenAI
 
 from stepproof.provenance import ProvenanceRecord, create_provenance
 from stepproof.providers.base import ImageInput, LLMProvider
-from stepproof.schemas import Evidence, SOP, Step, validate_with_retry
+from stepproof.schemas import SOP, Evidence, Step, validate_with_retry
 
 logger = logging.getLogger(__name__)
 

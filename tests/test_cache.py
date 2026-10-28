@@ -2,6 +2,7 @@
 
 import tempfile
 from pathlib import Path
+
 import pytest
 
 from stepproof.cache import SQLiteCache, make_cache_key

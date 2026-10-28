@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+
 from stepproof.config import settings
 from stepproof.provenance import assert_meta_compliant
 from stepproof.providers.base import LLMProvider, SegmentationProvider
