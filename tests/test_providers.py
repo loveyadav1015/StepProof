@@ -103,3 +103,80 @@ def test_factory_requires_meta_guard():
 
     seg_api = get_seg_provider("meta_api", require_meta=True)
     assert isinstance(seg_api, SegMetaAPIProvider)
+
+
+def test_llm_openai_compat_chat_style(monkeypatch):
+    from unittest.mock import MagicMock
+    from stepproof.providers.llm_openai_compat import LLMOpenAICompatProvider
+
+    provider = LLMOpenAICompatProvider(
+        base_url="https://api.meta.ai/v1",
+        model="muse-wonder-1.0",
+        api_key="test-key",
+        api_style="chat",
+    )
+
+    mock_resp = MagicMock()
+    mock_choice = MagicMock()
+    mock_choice.message.content = '{"task": "Assembly", "steps": []}'
+    mock_resp.choices = [mock_choice]
+    mock_resp.usage.prompt_tokens = 42
+    mock_resp.usage.completion_tokens = 15
+    mock_resp.usage.total_tokens = 57
+
+    monkeypatch.setattr(provider.client.chat.completions, "create", lambda **kwargs: mock_resp)
+
+    text, usage, prov = provider.complete("Test prompt", json_mode=True)
+    assert text == '{"task": "Assembly", "steps": []}'
+    assert usage["input_tokens"] == 42
+    assert usage["output_tokens"] == 15
+    assert prov.input_tokens == 42
+    assert prov.output_tokens == 15
+    assert prov.meta_compliant is True
+
+
+def test_llm_openai_compat_responses_style(monkeypatch):
+    from unittest.mock import MagicMock
+    from stepproof.providers.llm_openai_compat import LLMOpenAICompatProvider
+
+    provider = LLMOpenAICompatProvider(
+        base_url="https://api.meta.ai/v1",
+        model="muse-wonder-1.0",
+        api_key="test-key",
+        api_style="responses",
+    )
+
+    mock_resp = MagicMock()
+    mock_resp.output_text = "Here are the safety instructions."
+    mock_usage = MagicMock()
+    mock_usage.input_tokens = 30
+    mock_usage.output_tokens = 12
+    mock_usage.total_tokens = 42
+    mock_resp.usage = mock_usage
+
+    provider.client.responses = MagicMock()
+    monkeypatch.setattr(provider.client.responses, "create", lambda **kwargs: mock_resp)
+
+    text, usage, prov = provider.complete("Safety check", json_mode=False)
+    assert text == "Here are the safety instructions."
+    assert usage["input_tokens"] == 30
+    assert usage["output_tokens"] == 12
+    assert prov.total_tokens == 42
+    assert prov.meta_compliant is True
+
+
+def test_llm_openai_compat_budget_guard(monkeypatch):
+    from stepproof.config import settings
+    from stepproof.providers.llm_openai_compat import LLMOpenAICompatProvider
+
+    provider = LLMOpenAICompatProvider(
+        base_url="https://api.meta.ai/v1",
+        model="muse-wonder-1.0",
+        api_key="test-key",
+    )
+    provider.request_count = settings.max_requests_per_run
+
+    with pytest.raises(RuntimeError) as exc_info:
+        provider.complete("Should fail budget")
+    assert "Request budget exceeded" in str(exc_info.value)
+

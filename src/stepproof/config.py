@@ -62,6 +62,25 @@ class Settings(BaseModel):
         default_factory=lambda: os.getenv("LLM_REASONING_EFFORT") or None
     )
 
+    # Robustness and cost budget controls
+    max_images_per_request: int = Field(
+        default_factory=lambda: int(os.getenv("MAX_IMAGES_PER_REQUEST", "20"))
+    )
+    max_requests_per_run: int = Field(
+        default_factory=lambda: int(os.getenv("MAX_REQUESTS_PER_RUN", "50"))
+    )
+    max_cost_usd: float = Field(
+        default_factory=lambda: float(os.getenv("MAX_COST_USD", "5.0"))
+    )
+
+    # Configuration file paths
+    prices_path: Path = Field(
+        default_factory=lambda: Path(os.getenv("STEPPROOF_PRICES_PATH", "prices.yaml"))
+    )
+    calibration_path: Path = Field(
+        default_factory=lambda: Path(os.getenv("STEPPROOF_CALIBRATION_PATH", "calibration.yaml"))
+    )
+
     @classmethod
     def load(cls) -> Settings:
         """Create a Settings instance from current environment variables."""
