@@ -54,7 +54,7 @@ class LLMMockProvider(LLMProvider):
                     Check(type="present", object="green block", value=1),
                     Check(type="count", object="green block", value=1),
                 ],
-                common_errors=["Skipping green block", "Placing blue block first"],
+                common_errors=["Skipping green block", "Using purple block instead", "Placing blue block first"],
                 start_s=2.0,
                 end_s=4.0,
             ),

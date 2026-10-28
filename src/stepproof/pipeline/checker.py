@@ -22,6 +22,7 @@ class StepTrackingState:
         self.step = step
         self.state: StepState = "PENDING"
         self.flag_type: FlagType = "none"
+        self.secondary_flag_type: Optional[FlagType] = None
         self.reason: str = ""
         self.failed_rules: list[str] = []
         self.consecutive_passes: int = 0
@@ -30,6 +31,9 @@ class StepTrackingState:
         self.evidence_frame_path: Optional[str] = None
         self.confidence: float = 1.0
         self.latest_evidence: list[Evidence] = []
+        self.wrong_evidence: list[Evidence] = []
+        self.attempted: bool = False
+        self.later_step_completed_before: bool = False
 
 
 def evaluate_step_rules(
@@ -174,7 +178,7 @@ class StepChecker:
 
             # 1. Segment objects needed for pending/active steps
             for i, tracker in enumerate(self.trackers):
-                if tracker.state in ("DONE", "FLAGGED"):
+                if tracker.completion_timestamp_s is not None:
                     continue
 
                 step = tracker.step
@@ -189,6 +193,27 @@ class StepChecker:
                     )
                     frame_evidence.extend(evs)
 
+                # Check for common error candidates (e.g. wrong parts like purple block)
+                all_sop_objects = {o.lower().strip() for s in self.sop.steps for o in s.objects}
+                for err in step.common_errors:
+                    err_lower = err.lower()
+                    for candidate in ["purple block", "yellow block", "blue block", "green block", "red block"]:
+                        # A wrong part is an extraneous object not belonging to the valid SOP workflow
+                        if candidate in err_lower and candidate not in all_sop_objects:
+                            err_evs, _ = self.segmenter.find(
+                                image=frame_path,
+                                phrase=candidate,
+                                step_id=step.id,
+                                frame_index=f_idx,
+                                timestamp_s=t_s,
+                            )
+                            if err_evs:
+                                tracker.wrong_evidence.extend(err_evs)
+                                tracker.attempted = True
+                                err_desc = f"Detected wrong part '{candidate}' instead of '{', '.join(step.objects)}'"
+                                if err_desc not in tracker.failed_rules:
+                                    tracker.failed_rules.append(err_desc)
+
                 tracker.latest_evidence = frame_evidence
                 rules_pass, failed_rules = evaluate_step_rules(step, frame_evidence)
 
@@ -200,6 +225,10 @@ class StepChecker:
 
                     # Step is DONE when passing in consecutive sampled frames
                     if tracker.consecutive_passes >= self.consecutive_frames_required:
+                        judge_passed = True
+                        judge_conf = 0.95
+                        judge_reason = "Step verified."
+
                         # Call LLM judge if provided
                         if self.llm_judge is not None:
                             judge_res, _ = self.llm_judge.judge_step(
@@ -207,31 +236,40 @@ class StepChecker:
                                 step=step,
                                 evidence=frame_evidence,
                             )
-                            passed = judge_res.get("passed", True)
-                            conf = float(judge_res.get("confidence", 0.95))
-                            reason = judge_res.get("reason", "Step verified.")
-
-                            # Merge rule: judge says wrong with high confidence but rules pass -> needs_review
-                            if not passed and conf >= 0.85:
-                                tracker.state = "FLAGGED"
-                                tracker.flag_type = "needs_review"
-                                tracker.reason = f"Rules passed but judge flagged: {reason}"
-                                tracker.confidence = conf
-                            else:
-                                tracker.state = "DONE"
-                                tracker.reason = f"Verified: {reason}"
-                                tracker.confidence = conf
-                        else:
-                            tracker.state = "DONE"
-                            tracker.reason = (
-                                f"All checks passed across {self.consecutive_frames_required} frames."
-                            )
+                            judge_passed = judge_res.get("passed", True)
+                            judge_conf = float(judge_res.get("confidence", 0.95))
+                            judge_reason = judge_res.get("reason", "Step verified.")
 
                         tracker.completion_frame_idx = f_idx
                         tracker.completion_timestamp_s = t_s
+                        tracker.confidence = judge_conf
+
+                        # Merge rule: judge says wrong with high confidence but rules pass -> needs_review
+                        if not judge_passed and judge_conf >= 0.85:
+                            tracker.state = "FLAGGED"
+                            tracker.flag_type = "needs_review"
+                            tracker.reason = f"Rules passed but judge flagged: {judge_reason}"
+                        else:
+                            # Out-of-order check: did a later step complete before this one?
+                            later_done = any(
+                                later_t.completion_timestamp_s is not None and later_t.completion_timestamp_s <= t_s
+                                for later_t in self.trackers[i + 1:]
+                            )
+                            if later_done or tracker.later_step_completed_before:
+                                tracker.state = "FLAGGED"
+                                tracker.flag_type = "out_of_order"
+                                tracker.reason = (
+                                    f"Out of order: step {step.id} completed at t={t_s:.1f}s, after a later step did."
+                                )
+                            else:
+                                tracker.state = "DONE"
+                                tracker.flag_type = "none"
+                                tracker.reason = judge_reason or (
+                                    f"All checks passed across {self.consecutive_frames_required} frames."
+                                )
 
                         if self.out_dir:
-                            overlay_path = self.out_dir / f"step_{step.id}_done.jpg"
+                            overlay_path = self.out_dir / f"step_{step.id}_{tracker.state.lower()}.jpg"
                             tracker.evidence_frame_path = draw_evidence_overlay(
                                 image_path=frame_path,
                                 output_path=overlay_path,
@@ -242,48 +280,43 @@ class StepChecker:
                                 reason=tracker.reason,
                             )
 
-                        # Check if any earlier steps were skipped or out of order
+                        # Record for any earlier incomplete step that a later step finished first
                         for earlier_idx in range(i):
                             earlier_tracker = self.trackers[earlier_idx]
-                            if earlier_tracker.state in ("PENDING", "ACTIVE"):
-                                earlier_tracker.state = "FLAGGED"
-                                earlier_tracker.flag_type = "skipped"
-                                earlier_tracker.reason = (
-                                    f"Skipped: step {step.id} completed at t={t_s:.1f}s while "
-                                    f"step {earlier_tracker.step.id} was not completed."
-                                )
-                                earlier_tracker.confidence = 0.98
-                                if self.out_dir:
-                                    overlay_path = self.out_dir / f"step_{earlier_tracker.step.id}_skipped.jpg"
-                                    earlier_tracker.evidence_frame_path = draw_evidence_overlay(
-                                        image_path=frame_path,
-                                        output_path=overlay_path,
-                                        step=earlier_tracker.step,
-                                        state="FLAGGED",
-                                        flag_type="skipped",
-                                        evidence_list=frame_evidence,
-                                        reason=earlier_tracker.reason,
-                                    )
+                            if earlier_tracker.completion_timestamp_s is None:
+                                earlier_tracker.later_step_completed_before = True
                 else:
                     tracker.consecutive_passes = 0
-                    tracker.failed_rules = failed_rules
+                    if failed_rules:
+                        for fr in failed_rules:
+                            if fr not in tracker.failed_rules:
+                                tracker.failed_rules.append(fr)
 
-        # 2. End of video: finalize any remaining steps
+        # 2. End of video: finalize any remaining steps that never completed
         last_frame_path = sampled_frames[-1].file_path if sampled_frames else ""
         for tracker in self.trackers:
-            if tracker.state in ("PENDING", "ACTIVE"):
+            if tracker.completion_timestamp_s is None:
                 tracker.state = "FLAGGED"
-                if tracker.consecutive_passes > 0 or tracker.latest_evidence:
-                    # Attempted or wrong part
+                if tracker.wrong_evidence:
+                    tracker.flag_type = "wrong"
+                    if tracker.later_step_completed_before:
+                        tracker.secondary_flag_type = "skipped"
+                    reasons = tracker.failed_rules or [f"Wrong part detected for Step {tracker.step.id}"]
+                    tracker.reason = f"Failed: {', '.join(reasons)}"
+                elif tracker.later_step_completed_before:
+                    tracker.flag_type = "skipped"
+                    tracker.secondary_flag_type = None
+                    tracker.reason = (
+                        f"Skipped: step {tracker.step.id} was never completed while later steps completed."
+                    )
+                else:
                     tracker.flag_type = "wrong"
                     reasons = tracker.failed_rules or ["End-state not achieved before run ended"]
                     tracker.reason = f"Failed at end of run: {', '.join(reasons)}"
-                else:
-                    tracker.flag_type = "skipped"
-                    tracker.reason = f"Step {tracker.step.id} was never executed during the demonstration."
 
                 tracker.confidence = 0.95
                 if self.out_dir and last_frame_path:
+                    overlay_evidence = tracker.wrong_evidence or tracker.latest_evidence
                     overlay_path = self.out_dir / f"step_{tracker.step.id}_{tracker.flag_type}.jpg"
                     tracker.evidence_frame_path = draw_evidence_overlay(
                         image_path=last_frame_path,
@@ -291,22 +324,9 @@ class StepChecker:
                         step=tracker.step,
                         state="FLAGGED",
                         flag_type=tracker.flag_type,
-                        evidence_list=tracker.latest_evidence,
+                        evidence_list=overlay_evidence,
                         reason=tracker.reason,
                     )
-
-        # 3. Detect Out-of-Order completions among DONE steps
-        done_trackers = [t for t in self.trackers if t.state == "DONE" and t.completion_timestamp_s is not None]
-        for idx in range(1, len(done_trackers)):
-            curr = done_trackers[idx]
-            prev = done_trackers[idx - 1]
-            if curr.completion_timestamp_s < prev.completion_timestamp_s:
-                curr.state = "FLAGGED"
-                curr.flag_type = "out_of_order"
-                curr.reason = (
-                    f"Out of order: step {curr.step.id} completed at t={curr.completion_timestamp_s:.1f}s, "
-                    f"before step {prev.step.id} completed at t={prev.completion_timestamp_s:.1f}s."
-                )
 
         # Build output StepVerdict models
         verdicts: list[StepVerdict] = []
@@ -320,6 +340,7 @@ class StepChecker:
                     evidence_frame_path=tracker.evidence_frame_path,
                     confidence=tracker.confidence,
                     flag_type=tracker.flag_type,
+                    secondary_flag_type=tracker.secondary_flag_type,
                 )
             )
 

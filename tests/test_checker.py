@@ -99,8 +99,9 @@ def test_checker_correct_run(base_sop, monkeypatch):
     verdicts = checker.verify_run(sampled_frames)
 
     assert len(verdicts) == 3
-    assert all(v.state == "DONE" for v in verdicts)
-    assert all(v.flag_type == "none" for v in verdicts)
+    assert verdicts[0].step_id == 1 and verdicts[0].state == "DONE" and verdicts[0].flag_type == "none"
+    assert verdicts[1].step_id == 2 and verdicts[1].state == "DONE" and verdicts[1].flag_type == "none"
+    assert verdicts[2].step_id == 3 and verdicts[2].state == "DONE" and verdicts[2].flag_type == "none"
 
 
 def test_checker_skipped_step(base_sop, monkeypatch):
@@ -148,11 +149,10 @@ def test_checker_skipped_step(base_sop, monkeypatch):
     verdicts = checker.verify_run(sampled_frames)
 
     v1, v2, v3 = verdicts
-    assert v1.state == "DONE"
-    assert v2.state == "FLAGGED"
-    assert v2.flag_type == "skipped"
-    assert "Skipped" in v2.reason
-    assert v3.state == "DONE"
+    assert v1.step_id == 1 and v1.state == "DONE" and v1.flag_type == "none"
+    assert v2.step_id == 2 and v2.state == "FLAGGED" and v2.flag_type == "skipped"
+    assert "Skipped" in v2.reason or "skipped" in v2.reason
+    assert v3.step_id == 3 and v3.state == "DONE" and v3.flag_type == "none"
 
 
 def test_checker_wrong_part(base_sop, monkeypatch):
@@ -199,10 +199,10 @@ def test_checker_wrong_part(base_sop, monkeypatch):
     verdicts = checker.verify_run(sampled_frames)
 
     v1, v2, v3 = verdicts
-    assert v1.state == "DONE"
-    assert v2.state == "FLAGGED"
-    assert v2.flag_type in ("wrong", "skipped")
+    assert v1.step_id == 1 and v1.state == "DONE" and v1.flag_type == "none"
+    assert v2.step_id == 2 and v2.state == "FLAGGED" and v2.flag_type == "wrong"
     assert len(v2.failed_rules) > 0
+    assert any("green block" in r for r in v2.failed_rules)
 
 
 def test_checker_out_of_order(base_sop, monkeypatch):
@@ -253,9 +253,10 @@ def test_checker_out_of_order(base_sop, monkeypatch):
     checker = StepChecker(base_sop, segmenter=segmenter, consecutive_frames_required=3)
     verdicts = checker.verify_run(sampled_frames)
 
-    # Step 2 was flagged as skipped when step 3 completed first!
-    assert verdicts[1].state == "FLAGGED"
-    assert verdicts[1].flag_type == "skipped"
+    # Step 2 completed out of order (after Step 3 completed)
+    assert verdicts[0].step_id == 1 and verdicts[0].state == "DONE" and verdicts[0].flag_type == "none"
+    assert verdicts[1].step_id == 2 and verdicts[1].state == "FLAGGED" and verdicts[1].flag_type == "out_of_order"
+    assert verdicts[2].step_id == 3 and verdicts[2].state == "DONE" and verdicts[2].flag_type == "none"
 
 
 def test_checker_needs_review_merge_rule(base_sop, monkeypatch):

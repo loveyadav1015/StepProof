@@ -79,6 +79,10 @@ class StepVerdict(BaseModel):
         default="none",
         description="Type of failure flagged: skipped, wrong, out_of_order, needs_review, none",
     )
+    secondary_flag_type: Optional[FlagType] = Field(
+        default=None,
+        description="Optional secondary failure flag type when multiple conditions apply",
+    )
 
 
 class RunReport(BaseModel):
