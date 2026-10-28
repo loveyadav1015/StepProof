@@ -74,13 +74,45 @@ def test_seg_local_sam_stub_raises():
     assert "SegLocalSAMProvider is a stub" in str(exc_info.value)
 
 
-def test_seg_meta_api_stub_raises():
-    meta = SegMetaAPIProvider()
+def test_seg_meta_api_with_fixture(monkeypatch):
+    from pathlib import Path
+    import json
+    from stepproof.providers.seg_meta_api import parse_sam_output_text
+
+    fixture_path = Path("tests/fixtures/sam_stream_fixture.txt")
+    assert fixture_path.exists()
+
+    content = fixture_path.read_text()
+    deltas = []
+    for line in content.splitlines():
+        if line.startswith("data: ") and not line.endswith("[DONE]"):
+            try:
+                ev = json.loads(line[6:])
+                if ev.get("type") == "response.output_text.delta":
+                    deltas.append(ev.get("delta", ""))
+            except Exception:
+                pass
+
+    full_output = "".join(deltas)
+    assert len(full_output) > 0
+
+    meta = SegMetaAPIProvider(api_key="mock_key")
     assert meta.get_provenance().meta_compliant is True
-    dummy_frame = np.zeros((100, 100, 3), dtype=np.uint8)
-    with pytest.raises(NotImplementedError) as exc_info:
-        meta.find(dummy_frame, "breadboard")
-    assert "SegMetaAPIProvider is a stub" in str(exc_info.value)
+
+    # Test parse_sam_output_text
+    evs = parse_sam_output_text(full_output, phrase="resistor", step_id=1)
+    assert len(evs) == 1
+    assert evs[0].object == "resistor"
+    assert evs[0].bbox == [211, 228, 59, 26]
+    assert evs[0].mask_area_px == 1539
+    assert evs[0].confidence == 0.97
+
+    # Test find() without network call using monkeypatch
+    dummy_frame = np.zeros((300, 300, 3), dtype=np.uint8)
+    monkeypatch.setattr(meta, "_execute_sam_request", lambda phrase, b64_img: full_output)
+    found_evs, prov = meta.find(dummy_frame, "resistor")
+    assert len(found_evs) == 1
+    assert prov.meta_compliant is True
 
 
 def test_factory_requires_meta_guard():

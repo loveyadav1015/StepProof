@@ -1,0 +1,5 @@
+data: {"type": "response.output_text.delta", "delta": "<0f>0<|box;x1=211;y1=228;x2=270;y2=254;w=320;h=334;c=0.97|><|mask;x=0;y=0;c=0.97;data=27,60,~!!!!M!0c[0o91w?q1!pIH4pPRVp2B3'7`e.ioeAf6-k/#Xd8%dX9x(|>"}
+
+data: {"type": "response.completed"}
+
+data: [DONE]
