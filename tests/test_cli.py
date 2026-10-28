@@ -112,3 +112,56 @@ def test_cli_calibrate_and_eval(synthetic_videos, monkeypatch):
         assert main() == 0
         assert eval_report_path.exists()
         assert "EVALUATION REPORT" in eval_report_path.read_text().upper()
+
+
+def test_make_final_require_meta_refuses_cached_non_meta(synthetic_videos, monkeypatch, capsys):
+    learner_skipped = str(synthetic_videos["learner_skipped"])
+    expert_video = str(synthetic_videos["expert"])
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp_path = Path(tmpdir)
+        sop_path = tmp_path / "sop.json"
+        run_dir = tmp_path / "runs" / "skipped"
+
+        # 1. Build SOP
+        monkeypatch.setattr(
+            "sys.argv",
+            ["stepproof", "build-sop", expert_video, "--out", str(sop_path)],
+        )
+        assert main() == 0
+
+        # 2. Check learner (generates run report with mock non-meta provenance)
+        monkeypatch.setattr(
+            "sys.argv",
+            [
+                "stepproof",
+                "check",
+                learner_skipped,
+                "--sop",
+                str(sop_path),
+                "--out-dir",
+                str(run_dir),
+            ],
+        )
+        assert main() == 0
+
+        # 3. Simulate make demo-cached: replay strictly from cache
+        monkeypatch.setenv("STEPPROOF_MODE", "cache_only")
+        monkeypatch.setattr(
+            "sys.argv",
+            ["stepproof", "replay", str(run_dir)],
+        )
+        assert main() == 0
+
+        # 4. Simulate make final: sets STEPPROOF_REQUIRE_META=1 and refuses non-meta cached results
+        monkeypatch.setenv("STEPPROOF_REQUIRE_META", "1")
+        monkeypatch.setattr(
+            "sys.argv",
+            ["stepproof", "replay", str(run_dir), "--require-meta"],
+        )
+        assert main() == 1
+
+        captured = capsys.readouterr()
+        err_msg = captured.err + captured.out
+        assert "refuses non-Meta models" in err_msg or "STEPPROOF_REQUIRE_META REFUSAL" in err_msg
+

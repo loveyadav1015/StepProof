@@ -8,7 +8,7 @@ import sys
 import time
 from pathlib import Path
 
-from stepproof.cache import SQLiteCache
+from stepproof.cache import SQLiteCache, make_cache_key
 from stepproof.calibration import profile_video_evidence
 from stepproof.config import settings
 from stepproof.evaluation import run_evaluation
@@ -17,9 +17,9 @@ from stepproof.pipeline.checker import StepChecker
 from stepproof.pipeline.grounding import ground_step_objects
 from stepproof.pipeline.report import export_report, generate_markdown_report
 from stepproof.pipeline.sop_builder import build_sop
-from stepproof.provenance import assert_meta_compliant
+from stepproof.provenance import ProvenanceRecord, assert_meta_compliant, create_provenance
 from stepproof.providers.factory import get_llm_provider, get_seg_provider
-from stepproof.schemas import SOP, RunReport
+from stepproof.schemas import SOP, RunReport, StepVerdict
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger("stepproof")
@@ -82,7 +82,7 @@ def cmd_ground(args: argparse.Namespace) -> int:
 
 
 def cmd_check(args: argparse.Namespace) -> int:
-    """Verify learner demonstration video against SOP."""
+    """Verify learner demonstration video against SOP with caching support."""
     video_path = Path(args.video)
     sop_path = Path(args.sop)
     out_dir = Path(args.out_dir)
@@ -96,31 +96,90 @@ def cmd_check(args: argparse.Namespace) -> int:
     sampled = sample_video(video_path, output_dir=frames_dir)
     t_ingest = time.time() - t_ingest_start
 
-    segmenter = get_seg_provider(require_meta=args.require_meta)
-    llm_judge = get_llm_provider(require_meta=args.require_meta)
+    mode = (args.mode or settings.stepproof_mode or "live").lower().strip()
+    require_meta = args.require_meta or settings.stepproof_require_meta
+    cache = SQLiteCache()
 
-    checker = StepChecker(
-        sop=sop,
-        segmenter=segmenter,
-        llm_judge=llm_judge,
-        consecutive_frames_required=3,
-        out_dir=out_dir,
+    cache_key = make_cache_key(
+        provider="stepproof",
+        model_name="checker",
+        prompt_version="v1.0",
+        input_data={
+            "video_hash": sampled.video_hash,
+            "sop_task": sop.task,
+            "steps": [s.model_dump() for s in sop.steps],
+        },
     )
 
-    t_check_start = time.time()
-    logger.info("Evaluating learner video against %d steps...", len(sop.steps))
-    verdicts = checker.verify_run(sampled.frames)
-    t_check = time.time() - t_check_start
+    verdicts: list[StepVerdict] | None = None
+    provenance_list: list[ProvenanceRecord] | None = None
+    timings: dict[str, float] | None = None
 
-    provenance_list = [segmenter.get_provenance(), llm_judge.get_provenance()]
-    timings = {"ingest": round(t_ingest, 2), "check": round(t_check, 2)}
+    if mode in ("live", "cache_only"):
+        cached = cache.get(cache_key, require_meta=require_meta)
+        if cached is not None:
+            cached_data, _ = cached
+            logger.info("Cache hit: Loaded verified run from cache (mode=%s)", mode)
+            verdicts = [StepVerdict.model_validate(v) for v in cached_data["verdicts"]]
+            provenance_list = [
+                ProvenanceRecord.model_validate(p) for p in cached_data["provenance"]
+            ]
+            timings = cached_data.get("timings", {"ingest": round(t_ingest, 2), "check": 0.0})
+        elif mode == "cache_only":
+            raise KeyError(
+                f"Cache miss in cache_only mode: no cached verification found for {video_path.name}"
+            )
+
+    if verdicts is None:
+        segmenter = get_seg_provider(require_meta=require_meta)
+        llm_judge = get_llm_provider(require_meta=require_meta)
+
+        checker = StepChecker(
+            sop=sop,
+            segmenter=segmenter,
+            llm_judge=llm_judge,
+            consecutive_frames_required=3,
+            out_dir=out_dir,
+        )
+
+        t_check_start = time.time()
+        logger.info("Evaluating learner video against %d steps...", len(sop.steps))
+        verdicts = checker.verify_run(sampled.frames)
+        t_check = time.time() - t_check_start
+
+        provenance_list = [segmenter.get_provenance(), llm_judge.get_provenance()]
+        timings = {"ingest": round(t_ingest, 2), "check": round(t_check, 2)}
+
+        # Store in cache
+        prov_summary = provenance_list[0] if provenance_list else create_provenance("mock", "mock-model", meta_compliant=False)
+        cache.put(
+            cache_key=cache_key,
+            provider="stepproof",
+            model_name="checker",
+            prompt_version="v1.0",
+            input_data={
+                "video_hash": sampled.video_hash,
+                "sop_task": sop.task,
+                "steps": [s.model_dump() for s in sop.steps],
+            },
+            response_data={
+                "verdicts": [v.model_dump() for v in verdicts],
+                "provenance": [p.model_dump() for p in provenance_list],
+                "timings": timings,
+            },
+            provenance=prov_summary,
+        )
+
+    assert verdicts is not None
+    assert provenance_list is not None
+    assert timings is not None
 
     export_report(
         sop_id=sop.task,
         verdicts=verdicts,
         provenance=provenance_list,
         timings=timings,
-        cost_estimate={"usd": 0.0},
+        cost_estimate={"usd": sum(p.cost_usd for p in provenance_list)},
         output_dir=out_dir,
     )
 
@@ -172,7 +231,11 @@ def cmd_replay(args: argparse.Namespace) -> int:
     # Check Meta compliance guard if active
     if settings.stepproof_require_meta or args.require_meta:
         for prov in report.provenance:
-            assert_meta_compliant(prov)
+            try:
+                assert_meta_compliant(prov)
+            except RuntimeError as e:
+                print(f"\n❌ STEPPROOF_REQUIRE_META REFUSAL: {e}\n", file=sys.stderr)
+                raise
 
     print("\n" + "=" * 60)
     print(f"REPLAYING RUN: {report.sop_id}")

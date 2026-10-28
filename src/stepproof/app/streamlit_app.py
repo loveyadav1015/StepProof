@@ -269,29 +269,34 @@ with tab2:
         st.markdown("---")
         st.subheader("Step Verification Checklist")
 
+        is_meta_compliant = all(p.meta_compliant for p in latest_rep.provenance) if latest_rep.provenance else False
+        prov_badge_html = get_provenance_badge_html(is_meta_compliant)
+
         for v in latest_rep.verdicts:
             col_stat, col_ev = st.columns([2, 1])
 
             with col_stat:
                 if v.state == "DONE":
                     st.success(f"**Step {v.step_id}: DONE** — {v.reason}")
-                elif v.flag_type == "skipped":
-                    st.error(f"**Step {v.step_id}: FLAGGED (SKIPPED)** — {v.reason}")
-                elif v.flag_type == "wrong":
-                    st.error(f"**Step {v.step_id}: FLAGGED (WRONG PART / PLACEMENT)** — {v.reason}")
-                elif v.flag_type == "out_of_order":
-                    st.warning(f"**Step {v.step_id}: FLAGGED (OUT OF ORDER)** — {v.reason}")
                 else:
-                    st.warning(f"**Step {v.step_id}: NEEDS REVIEW** — {v.reason}")
+                    flag_label = v.flag_type.upper().replace("_", " ")
+                    st.error(f"**Step {v.step_id}: FLAGGED ({flag_label})**")
+                    st.markdown(f"**Provenance:** {prov_badge_html}", unsafe_allow_html=True)
+                    st.markdown(f"**Model Reason:** {v.reason}")
 
-                if v.failed_rules:
-                    st.write("Failed Rules:")
-                    for r in v.failed_rules:
-                        st.code(r)
+                    if v.failed_rules:
+                        st.markdown("**Failed Rule(s):**")
+                        for r in v.failed_rules:
+                            st.code(r)
+                    else:
+                        st.markdown(f"**Failed Rule:** Step sequence rule violated (type: `{v.flag_type}`)")
 
             with col_ev:
-                if v.evidence_frame_path and Path(v.evidence_frame_path).exists():
-                    st.image(v.evidence_frame_path, caption=f"Step {v.step_id} Evidence Frame")
+                ev_path = v.evidence_frame_path
+                if ev_path and Path(ev_path).exists():
+                    st.image(str(ev_path), caption=f"Step {v.step_id} Evidence Overlay")
+                else:
+                    st.caption("No evidence frame available")
 
 
 # ==============================================================================
@@ -328,6 +333,32 @@ with tab3:
                         st.markdown(f"**{p.provider.upper()}:** `{p.model_name}`")
                         st.caption(f"Host: `{p.base_url_host}`")
                         st.markdown(get_provenance_badge_html(p.meta_compliant), unsafe_allow_html=True)
+
+                # Flagged Steps Detail Audit
+                flagged_steps = [v for v in rep_data.verdicts if v.state != "DONE" or v.flag_type != "none"]
+                if flagged_steps:
+                    st.markdown("### ⚠️ Flagged Steps Visual Audit")
+                    is_meta = all(p.meta_compliant for p in rep_data.provenance) if rep_data.provenance else False
+                    p_badge = get_provenance_badge_html(is_meta)
+                    for fv in flagged_steps:
+                        fc1, fc2 = st.columns([2, 1])
+                        with fc1:
+                            f_label = fv.flag_type.upper().replace("_", " ")
+                            st.error(f"**Step {fv.step_id}: FLAGGED ({f_label})**")
+                            st.markdown(f"**Provenance:** {p_badge}", unsafe_allow_html=True)
+                            st.markdown(f"**Model Reason:** {fv.reason}")
+                            if fv.failed_rules:
+                                st.markdown("**Failed Rule(s):**")
+                                for r in fv.failed_rules:
+                                    st.code(r)
+                            else:
+                                st.markdown(f"**Failed Rule:** Step sequence rule violated (type: `{fv.flag_type}`)")
+                        with fc2:
+                            ev_path = fv.evidence_frame_path
+                            if ev_path and Path(ev_path).exists():
+                                st.image(str(ev_path), caption=f"Step {fv.step_id} Evidence Overlay")
+                            else:
+                                st.caption("No evidence overlay available")
 
                 st.markdown("---")
                 if md_file.exists():
