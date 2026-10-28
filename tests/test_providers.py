@@ -65,13 +65,13 @@ def test_mock_seg_color_contour_detection():
     assert len(ev_red) == 0
 
 
-def test_seg_local_sam_stub_raises():
-    sam = SegLocalSAMProvider()
+def test_seg_local_sam_missing_weights_raises():
+    sam = SegLocalSAMProvider(weights_dir="weights/sam3.1")
     assert sam.get_provenance().meta_compliant is True
     dummy_frame = np.zeros((100, 100, 3), dtype=np.uint8)
-    with pytest.raises(NotImplementedError) as exc_info:
+    with pytest.raises(FileNotFoundError) as exc_info:
         sam.find(dummy_frame, "resistor")
-    assert "SegLocalSAMProvider is a stub" in str(exc_info.value)
+    assert "SAM 3.1 local weights not found" in str(exc_info.value)
 
 
 def test_seg_meta_api_with_fixture(monkeypatch):
