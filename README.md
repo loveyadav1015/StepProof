@@ -1,4 +1,4 @@
-# StepProof 👁️
+# StepProof 
 
 > **Offline-first video-to-SOP generation and learner step verification engine with visual evidence.**  
 > Built for the **Meta AI Developer Hackathon 2026**.
@@ -16,7 +16,7 @@ StepProof is designed around a **free-first, Meta-compliant architecture**:
 
 ---
 
-## ⚡ Prerequisites
+##  Prerequisites
 
 - **Python 3.11+**
 - **ffmpeg** (system executable): StepProof uses `ffmpeg` for video decoding, downsampling, and keyframe extraction.
@@ -31,7 +31,7 @@ StepProof is designed around a **free-first, Meta-compliant architecture**:
 
 ---
 
-## 🚀 Quick Start (Zero API Keys Required)
+##  Quick Start (Zero API Keys Required)
 
 StepProof is ready to run immediately using synthetic demo footage and offline mock providers.
 
@@ -75,7 +75,7 @@ Opens the interactive 3-tab dashboard at `http://localhost:8501`:
 
 ---
 
-## 🎯 Verification Semantics & Flag Types
+##  Verification Semantics & Flag Types
 
 StepProof implements a rigorous step state machine. Each step receives a primary `flag_type` and optional `secondary_flag_type`:
 
@@ -89,7 +89,7 @@ StepProof implements a rigorous step state machine. Each step receives a primary
 
 ---
 
-## 🏆 Meta Model API & SAM 3.1 Integration
+##  Meta Model API & SAM 3.1 Integration
 
 StepProof officially integrates with Meta's developer platform (`https://api.meta.ai/v1`).
 
@@ -186,7 +186,7 @@ StepProof prevents runaway API spend and inference failures:
 
 ---
 
-## 🔒 Meta Compliance Enforcement (`make final`)
+##  Meta Compliance Enforcement (`make final`)
 
 The hackathon compliance guard ensures no mock or dev stand-in results are mistakenly submitted:
 ```bash
@@ -207,7 +207,7 @@ When `STEPPROOF_REQUIRE_META=1` is active:
 
 ---
 
-## 🛠️ Complete CLI Command Reference
+##  Complete CLI Command Reference
 
 ```bash
 # 1. Build SOP from expert demonstration video
@@ -234,7 +234,7 @@ stepproof replay <run_dir> [--require-meta]
 
 ---
 
-## 📁 Repository Layout
+##  Repository Layout
 
 ```
 stepproof/
@@ -285,5 +285,5 @@ stepproof/
 
 ---
 
-## ⚖️ License
+##  License
 MIT License.
