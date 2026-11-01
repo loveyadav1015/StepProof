@@ -173,6 +173,22 @@ Outputs an executive summary table and generates `eval_report.md`:
 
 Template manifest for custom real footage is available at `manifests/real_footage_template.yaml`.
 
+#### Latest Benchmark Results (`eval_report.md`)
+
+| Metric | Measured Value | Benchmark Target | Status |
+| :--- | :--- | :--- | :--- |
+| **Correct-Run False Alarms** | 0 | 0 | Optimal |
+| **Detection Rate (Staged Errors)** | 100.0% (3/3) | 100% | Optimal |
+| **Average Latency Per Step** | 0.031s | < 0.500s (mock) | Sub-second |
+| **Estimated Cost Per Run** | $0.000000 USD | < $0.05 | Zero Spend |
+
+| Scenario Name | Result | Expected | Observed Flags & Types | Latency / Step |
+| :--- | :---: | :---: | :---: | :---: |
+| **Correct Sequence Execution** | ✅ PASS | None | None (`none`) | 0.026s |
+| **Step 2 Skipped (Missing Green Block)** | ✅ PASS | Step 2 | Step 2 (`skipped`) | 0.034s |
+| **Step 2 Wrong Part (Purple Block)** | ✅ PASS | Step 2 | Step 2 (`wrong`) | 0.036s |
+| **Step 2 Out-of-Order (Blue Placed First)** | ✅ PASS | Step 2 | Step 2 (`out_of_order`) | 0.028s |
+
 ---
 
 ## 🛡️ Robustness, Budget Guards & Cost Tracking
