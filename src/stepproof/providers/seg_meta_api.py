@@ -114,11 +114,13 @@ class SegMetaAPIProvider(SegmentationProvider):
         model_name: str = "sam-3.1",
         base_url: str | None = None,
         out_dir: Path | str | None = None,
+        api_style: str | None = None,
     ):
         self.api_key = api_key or os.getenv("META_API_KEY") or os.getenv("MODEL_API_KEY") or ""
         self.model_name = model_name
         self.base_url = (base_url or os.getenv("META_API_BASE_URL", "https://api.meta.ai/v1")).rstrip("/")
         self.out_dir = Path(out_dir) if out_dir else None
+        self.api_style = (api_style or os.getenv("SAM_API_STYLE", "responses")).lower().strip()
 
         self.provenance = create_provenance(
             provider="meta_api",
@@ -130,13 +132,8 @@ class SegMetaAPIProvider(SegmentationProvider):
     def get_provenance(self) -> ProvenanceRecord:
         return self.provenance
 
-    def _execute_sam_request(self, phrase: str, b64_img: str) -> str:
-        """Call Meta Responses API for SAM 3.1 with retries and exponential backoff on 429/5xx."""
-        if not self.api_key:
-            raise ValueError(
-                "Meta API key not configured. Set META_API_KEY or MODEL_API_KEY environment variable."
-            )
-
+    def _execute_responses_stream(self, phrase: str, b64_img: str) -> str:
+        """Call Meta Responses streaming API for SAM 3.1."""
         endpoint = f"{self.base_url}/responses"
         headers = {
             "Authorization": f"Bearer {self.api_key}",
@@ -161,41 +158,91 @@ class SegMetaAPIProvider(SegmentationProvider):
             "stream": True,
         }
 
+        with httpx.Client(timeout=60.0) as client:
+            with client.stream("POST", endpoint, headers=headers, json=payload) as response:
+                if response.status_code in (429, 500, 502, 503, 504):
+                    response.read()
+                    raise httpx.HTTPStatusError(
+                        f"HTTP {response.status_code}",
+                        request=response.request,
+                        response=response,
+                    )
+                response.raise_for_status()
+
+                output_chunks: list[str] = []
+                for line in response.iter_lines():
+                    if not line or not line.startswith("data: "):
+                        continue
+                    data_str = line[6:].strip()
+                    if data_str == "[DONE]":
+                        break
+                    try:
+                        event = json.loads(data_str)
+                        if event.get("type") == "response.output_text.delta":
+                            output_chunks.append(event.get("delta", ""))
+                    except json.JSONDecodeError:
+                        continue
+
+                return "".join(output_chunks)
+
+    def _execute_chat_completions(self, phrase: str, b64_img: str) -> str:
+        """Call Meta standard chat/completions endpoint for SAM 3.1."""
+        endpoint = f"{self.base_url}/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "model": self.model_name,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": phrase},
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": f"data:image/jpeg;base64,{b64_img}"},
+                        },
+                    ],
+                }
+            ],
+        }
+
+        with httpx.Client(timeout=60.0) as client:
+            response = client.post(endpoint, headers=headers, json=payload)
+            if response.status_code in (429, 500, 502, 503, 504):
+                raise httpx.HTTPStatusError(
+                    f"HTTP {response.status_code}",
+                    request=response.request,
+                    response=response,
+                )
+            response.raise_for_status()
+            data = response.json()
+            choices = data.get("choices", [])
+            if choices:
+                return choices[0].get("message", {}).get("content", "")
+            return ""
+
+    def _execute_sam_request(self, phrase: str, b64_img: str) -> str:
+        """Call SAM 3.1 using configured style (responses or chat) with retry/backoff."""
+        if not self.api_key:
+            raise ValueError(
+                "Meta API key not configured. Set META_API_KEY or MODEL_API_KEY environment variable."
+            )
+
         max_attempts = 4
         delay = 1.0
 
         for attempt in range(1, max_attempts + 1):
             try:
-                with httpx.Client(timeout=60.0) as client:
-                    with client.stream("POST", endpoint, headers=headers, json=payload) as response:
-                        if response.status_code in (429, 500, 502, 503, 504):
-                            response.read()
-                            raise httpx.HTTPStatusError(
-                                f"HTTP {response.status_code}",
-                                request=response.request,
-                                response=response,
-                            )
-                        response.raise_for_status()
-
-                        output_chunks: list[str] = []
-                        for line in response.iter_lines():
-                            if not line or not line.startswith("data: "):
-                                continue
-                            data_str = line[6:].strip()
-                            if data_str == "[DONE]":
-                                break
-                            try:
-                                event = json.loads(data_str)
-                                if event.get("type") == "response.output_text.delta":
-                                    output_chunks.append(event.get("delta", ""))
-                            except json.JSONDecodeError:
-                                continue
-
-                        return "".join(output_chunks)
-
+                if self.api_style == "chat":
+                    return self._execute_chat_completions(phrase=phrase, b64_img=b64_img)
+                else:
+                    return self._execute_responses_stream(phrase=phrase, b64_img=b64_img)
             except (httpx.HTTPStatusError, httpx.RequestError) as e:
                 logger.warning(
-                    "SAM 3.1 request attempt %d/%d failed: %s. Retrying in %.1fs...",
+                    "SAM 3.1 (%s style) request attempt %d/%d failed: %s. Retrying in %.1fs...",
+                    self.api_style,
                     attempt,
                     max_attempts,
                     e,
@@ -203,7 +250,7 @@ class SegMetaAPIProvider(SegmentationProvider):
                 )
                 if attempt == max_attempts:
                     raise RuntimeError(
-                        f"SAM 3.1 API request failed after {max_attempts} attempts: {e}"
+                        f"SAM 3.1 ({self.api_style} style) API request failed after {max_attempts} attempts: {e}"
                     ) from e
                 time.sleep(delay)
                 delay *= 2.0

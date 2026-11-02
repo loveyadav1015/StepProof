@@ -33,28 +33,36 @@ def get_test_image() -> np.ndarray:
 def run_smoke_sam() -> int:
     api_key = os.getenv("META_API_KEY") or os.getenv("MODEL_API_KEY") or ""
     base_url = os.getenv("META_API_BASE_URL", "https://api.meta.ai/v1")
+    api_style = os.getenv("SAM_API_STYLE", "responses").lower().strip()
 
     print("=" * 60)
     print("STEPPROOF HOSTED SAM 3.1 SMOKE TEST")
     print("=" * 60)
-    print(f"Base URL: {base_url}")
-    print(f"API Key:  {'[CONFIGURED]' if api_key else '[NOT PRESENT]'}")
+    print(f"Base URL:  {base_url}")
+    print(f"API Style: {api_style} (responses stream or chat/completions)")
+    print(f"API Key:   {'[CONFIGURED]' if api_key else '[NOT PRESENT]'}")
 
     if not api_key:
         print("\nℹ️  No META_API_KEY or MODEL_API_KEY detected in environment.")
         print("To run a live call against Meta's hosted SAM 3.1:")
         print("  export META_API_KEY=your_key_here")
+        print("  export SAM_API_STYLE=responses  # or 'chat'")
         print("  python scripts/smoke_sam.py\n")
         print("Skipping live network call (no-op).")
         print("=" * 60)
         return 0
 
     out_dir = repo_root / "data" / "outputs" / "sam_smoke"
-    provider = SegMetaAPIProvider(api_key=api_key, base_url=base_url, out_dir=out_dir)
+    provider = SegMetaAPIProvider(
+        api_key=api_key,
+        base_url=base_url,
+        out_dir=out_dir,
+        api_style=api_style,
+    )
 
     img = get_test_image()
     phrase = "red square"
-    print(f"\nSending image segmentation request for: '{phrase}'...")
+    print(f"\nSending image segmentation request for: '{phrase}' using style '{api_style}'...")
 
     t0 = time.time()
     try:
@@ -72,7 +80,12 @@ def run_smoke_sam() -> int:
         return 0
     except Exception as e:
         elapsed = time.time() - t0
-        print(f"❌ SAM 3.1 call failed after {elapsed:.2f}s: {e}")
+        print(f"❌ SAM 3.1 call failed after {elapsed:.2f}s using style '{api_style}': {e}")
+        alt_style = "chat" if api_style == "responses" else "responses"
+        print(f"\n💡 Hint: If style '{api_style}' failed, switch styles by running:")
+        print(f"   export SAM_API_STYLE={alt_style}")
+        print("   python scripts/smoke_sam.py\n")
+        print("=" * 60)
         return 1
 
 

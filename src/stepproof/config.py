@@ -16,7 +16,7 @@ class Settings(BaseModel):
     stepproof_llm: Literal["mock", "openai_compat"] = Field(
         default_factory=lambda: os.getenv("STEPPROOF_LLM", "mock")  # type: ignore
     )
-    stepproof_seg: Literal["mock", "local_sam", "meta_api"] = Field(
+    stepproof_seg: Literal["mock", "dev_color", "local_sam", "meta_api"] = Field(
         default_factory=lambda: os.getenv("STEPPROOF_SEG", "mock")  # type: ignore
     )
 
@@ -60,6 +60,18 @@ class Settings(BaseModel):
     )
     llm_reasoning_effort: Optional[str] = Field(
         default_factory=lambda: os.getenv("LLM_REASONING_EFFORT") or None
+    )
+    llm_text_only: bool = Field(
+        default_factory=lambda: os.getenv("LLM_TEXT_ONLY", "0").lower() in ("1", "true", "yes")
+    )
+    sam_api_style: Literal["responses", "chat"] = Field(
+        default_factory=lambda: os.getenv("SAM_API_STYLE", "responses").lower()  # type: ignore
+    )
+    llm_rpm_limit: int = Field(
+        default_factory=lambda: int(os.getenv("LLM_RPM_LIMIT", "20"))
+    )
+    llm_tpm_limit: int = Field(
+        default_factory=lambda: int(os.getenv("LLM_TPM_LIMIT", "6000"))
     )
 
     # Robustness and cost budget controls

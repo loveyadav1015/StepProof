@@ -215,3 +215,90 @@ def test_llm_openai_compat_budget_guard(monkeypatch):
         provider.complete("Should fail budget")
     assert "Request budget exceeded" in str(exc_info.value)
 
+
+def test_llm_cost_budget_guard_with_nonzero_prices(monkeypatch):
+    """Test proving MAX_COST_USD stops a run when prices are non-zero."""
+    from stepproof.config import settings
+    from stepproof.providers.llm_openai_compat import LLMOpenAICompatProvider
+
+    provider = LLMOpenAICompatProvider(
+        base_url="https://api.meta.ai/v1",
+        model="muse-wonder-1.0",
+        api_key="test-key",
+    )
+    # Set accumulated cost above max_cost_usd
+    provider.total_cost_usd = settings.max_cost_usd + 0.01
+
+    with pytest.raises(RuntimeError) as exc_info:
+        provider.complete("Should trigger cost budget exceeded")
+    assert "Cost budget exceeded: MAX_COST_USD limit reached" in str(exc_info.value)
+
+
+def test_llm_text_only_groq_judge_and_refusal(monkeypatch):
+    """Test text-only Groq Llama judge mode and strict Meta compliance refusal."""
+    from unittest.mock import MagicMock
+    from stepproof.providers.llm_openai_compat import LLMOpenAICompatProvider
+    from stepproof.providers.factory import get_llm_provider
+    from stepproof.schemas import Step, Check, Evidence
+
+    # Groq provider configuration
+    provider = LLMOpenAICompatProvider(
+        base_url="https://api.groq.com/openai/v1",
+        model="llama-3.3-70b-versatile",
+        api_key="gsk-mock-key",
+    )
+    provider.text_only = True
+    provider.rpm_limit = 1000
+
+    # 1. Provenance must be meta_compliant=False (Dev stand-in)
+    prov = provider.get_provenance()
+    assert prov.meta_compliant is False
+    assert prov.badge == "Dev stand-in"
+
+    # 2. STEPPROOF_REQUIRE_META=1 must refuse this provider when configured with Groq/Llama
+    monkeypatch.setenv("LLM_MODEL", "llama-3.3-70b-versatile")
+    monkeypatch.setenv("LLM_BASE_URL", "https://api.groq.com/openai/v1")
+    with pytest.raises(RuntimeError) as exc:
+        get_llm_provider("openai_compat", require_meta=True)
+    assert "refuses non-Meta models" in str(exc.value)
+
+    # 3. Text-only judge produces valid verdict with mock transport
+    mock_resp = MagicMock()
+    mock_choice = MagicMock()
+    mock_choice.message.content = '{"passed": true, "reason": "Text evidence confirms resistor placed", "confidence": 0.95, "failed_rules": []}'
+    mock_resp.choices = [mock_choice]
+    mock_resp.usage.prompt_tokens = 50
+    mock_resp.usage.completion_tokens = 20
+    mock_resp.usage.total_tokens = 70
+
+    captured_messages = []
+    def mock_create(**kwargs):
+        captured_messages.extend(kwargs.get("messages", []))
+        return mock_resp
+
+    monkeypatch.setattr(provider.client.chat.completions, "create", mock_create)
+
+    step = Step(
+        id=1,
+        instruction="Place resistor",
+        objects=["resistor"],
+        expected_end_state="Resistor on tie points",
+        checks=[Check(type="present", object="resistor", value=1)],
+    )
+    ev = [Evidence(step_id=1, frame_index=0, timestamp_s=0.5, object="resistor", count=1, mask_area_px=200, bbox=[10, 10, 20, 20], confidence=0.9)]
+
+    dummy_frame = np.zeros((100, 100, 3), dtype=np.uint8)
+    verdict, p = provider.judge_step(frame=dummy_frame, step=step, evidence=ev)
+
+    assert verdict["passed"] is True
+    assert "Text evidence confirms" in verdict["reason"]
+
+    # Verify no image was sent in any message payload
+    for msg in captured_messages:
+        content = msg.get("content", "")
+        if isinstance(content, list):
+            for part in content:
+                assert part.get("type") != "image_url", "Image payload should NOT be sent to text-only model!"
+        elif isinstance(content, str):
+            assert "base64" not in content
+
