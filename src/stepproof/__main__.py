@@ -25,6 +25,74 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger("stepproof")
 
 
+def cmd_load_sop(args: argparse.Namespace) -> int:
+    """Validate hand-written SOP and store as golden SOP."""
+    file_path = Path(args.file)
+    out_path = Path(args.out)
+    if not file_path.exists():
+        logger.error("SOP file not found: %s", file_path)
+        return 1
+
+    try:
+        content = file_path.read_text(encoding="utf-8")
+        sop = SOP.model_validate_json(content)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(sop.model_dump_json(indent=2), encoding="utf-8")
+        print(f"✅ Handcrafted SOP validated and loaded to {out_path} ({len(sop.steps)} steps)")
+        return 0
+    except Exception as e:
+        logger.error("Failed to validate SOP: %s", e)
+        return 1
+
+
+def cmd_calibrate_colors(args: argparse.Namespace) -> int:
+    """Inspect frame and suggest/tune HSV color ranges for objects."""
+    import cv2
+    import numpy as np
+    from stepproof.providers.seg_dev_color import load_color_config
+
+    frame_path = Path(args.frame)
+    if not frame_path.exists():
+        logger.error("Frame not found: %s", frame_path)
+        return 1
+
+    img = cv2.imread(str(frame_path))
+    if img is None:
+        logger.error("Could not load image: %s", frame_path)
+        return 1
+
+    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+    print("=" * 60)
+    print(f"HSV COLOR CALIBRATION: {frame_path.name} ({img.shape[1]}x{img.shape[0]})")
+    print("=" * 60)
+
+    cfg = load_color_config()
+    if not cfg:
+        print("No objects configured in config/colors.yaml.")
+    else:
+        print(f"Configured objects in config/colors.yaml:")
+        for obj, data in cfg.items():
+            ranges = data.get("ranges", [])
+            print(f"- {obj}: {len(ranges)} range(s), min_area={data.get('min_area_px', 100)}px")
+            # Calculate pixel count in this frame
+            combined_mask = np.zeros(hsv.shape[:2], dtype=np.uint8)
+            for r in ranges:
+                lower = np.array(r[0], dtype=np.uint8)
+                upper = np.array(r[1], dtype=np.uint8)
+                mask = cv2.inRange(hsv, lower, upper)
+                combined_mask = cv2.bitwise_or(combined_mask, mask)
+            detected_px = cv2.countNonZero(combined_mask)
+            print(f"  -> Matched pixels in frame: {detected_px} px")
+
+    # Center crop sample statistics
+    h, w = hsv.shape[:2]
+    crop = hsv[h//4:3*h//4, w//4:3*w//4]
+    mean_hsv = crop.mean(axis=(0, 1)).astype(int)
+    print(f"\nCenter region average HSV: H={mean_hsv[0]}, S={mean_hsv[1]}, V={mean_hsv[2]}")
+    print("=" * 60)
+    return 0
+
+
 def cmd_build_sop(args: argparse.Namespace) -> int:
     """Extract frames and generate structured SOP."""
     video_path = Path(args.video)
@@ -271,6 +339,12 @@ def cmd_calibrate(args: argparse.Namespace) -> int:
 
     stats = profile_video_evidence(video_path, sop, seg)
 
+    # Write draft calibration.yaml if requested
+    out_cal = Path(args.out) if getattr(args, "out", None) else None
+    if out_cal:
+        from stepproof.calibration import export_draft_calibration_yaml
+        export_draft_calibration_yaml(stats, output_path=out_cal)
+
     for step_id, info in stats.items():
         print(f"\n[Step {step_id}] {info['instruction']}")
         print(f"{'Object':<16} | {'Seen/Total':<10} | {'Area (min/avg/max)':<20} | {'Conf (min/avg)':<14} | Recommended (Area, Conf)")
@@ -283,7 +357,10 @@ def cmd_calibrate(args: argparse.Namespace) -> int:
             print(f"{obj_name:<16} | {seen_str:<10} | {area_str:<20} | {conf_str:<14} | {rec_str}")
 
     print("\n" + "=" * 85)
-    print("✅ Calibration profiling complete! Edit 'calibration.yaml' to update thresholds.")
+    if out_cal:
+        print(f"✅ Calibration profiling complete! Draft written to: {out_cal}")
+    else:
+        print("✅ Calibration profiling complete! Use --out to export a draft calibration.yaml.")
     print("=" * 85 + "\n")
     return 0
 
@@ -320,6 +397,15 @@ def build_parser() -> argparse.ArgumentParser:
     p_build.add_argument("--mode", default=None, choices=["live", "cache_only", "refresh"])
     p_build.add_argument("--require-meta", action="store_true", help="Enforce Meta compliance guard")
 
+    # load-sop
+    p_load = subparsers.add_parser("load-sop", help="Validate hand-written SOP and store as golden SOP")
+    p_load.add_argument("file", help="Path to hand-written SOP JSON file")
+    p_load.add_argument("--out", default="data/outputs/golden_sop.json", help="Destination golden SOP path")
+
+    # calibrate-colors
+    p_cc = subparsers.add_parser("calibrate-colors", help="Inspect frame and calibrate HSV color ranges")
+    p_cc.add_argument("frame", help="Path to sample keyframe image")
+
     # ground
     p_ground = subparsers.add_parser("ground", help="Ground SOP physical objects on keyframes")
     p_ground.add_argument("video", help="Path to expert demonstration video")
@@ -339,6 +425,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_cal = subparsers.add_parser("calibrate", help="Profile per-step evidence stats for threshold tuning")
     p_cal.add_argument("video", help="Path to demonstration video")
     p_cal.add_argument("--sop", required=True, help="Path to golden sop.json")
+    p_cal.add_argument("--out", default=None, help="Output path to write draft calibration.yaml")
     p_cal.add_argument("--require-meta", action="store_true", help="Enforce Meta compliance guard")
 
     # eval
@@ -366,6 +453,8 @@ def main() -> int:
 
     commands = {
         "build-sop": cmd_build_sop,
+        "load-sop": cmd_load_sop,
+        "calibrate-colors": cmd_calibrate_colors,
         "ground": cmd_ground,
         "check": cmd_check,
         "calibrate": cmd_calibrate,

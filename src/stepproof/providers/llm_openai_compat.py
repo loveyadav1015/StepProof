@@ -65,6 +65,15 @@ class LLMOpenAICompatProvider(LLMProvider):
             else (float(temp_env) if temp_env else None)
         )
         self.reasoning_effort = reasoning_effort or os.getenv("LLM_REASONING_EFFORT") or None
+        self.text_only = (
+            os.getenv("LLM_TEXT_ONLY", "0").lower() in ("1", "true", "yes")
+            or settings.max_images_per_request == 0
+        )
+        self.rpm_limit = settings.llm_rpm_limit
+        self.tpm_limit = settings.llm_tpm_limit
+        self._last_call_time = 0.0
+        self._tokens_this_minute = 0
+        self._minute_start_time = time.time()
 
         self.client = OpenAI(
             base_url=self.base_url,
@@ -95,9 +104,36 @@ class LLMOpenAICompatProvider(LLMProvider):
                 f"Cost budget exceeded: MAX_COST_USD limit reached (${settings.max_cost_usd:.2f})"
             )
 
+    def _throttle(self) -> None:
+        """Throttle requests and token throughput for free-tier limits (RPM & TPM)."""
+        now = time.time()
+        # Reset 1-minute window if expired
+        if now - self._minute_start_time >= 60.0:
+            self._minute_start_time = now
+            self._tokens_this_minute = 0
+
+        # RPM delay
+        min_interval = 60.0 / max(1, self.rpm_limit)
+        elapsed = now - self._last_call_time
+        if elapsed < min_interval:
+            sleep_needed = min_interval - elapsed
+            logger.info("Throttling LLM call for RPM limit (sleeping %.2fs)", sleep_needed)
+            time.sleep(sleep_needed)
+
+        # TPM check
+        if self._tokens_this_minute >= self.tpm_limit:
+            wait_time = max(0.5, 60.0 - (time.time() - self._minute_start_time))
+            logger.warning("LLM TPM limit reached (%d tokens). Waiting %.1fs...", self.tpm_limit, wait_time)
+            time.sleep(wait_time)
+            self._minute_start_time = time.time()
+            self._tokens_this_minute = 0
+
+        self._last_call_time = time.time()
+
     def _execute_with_retry(self, call_fn: Callable[[], tuple[str, dict[str, int]]]) -> str:
-        """Execute API request with budget check and exponential backoff retry on 429/5xx."""
+        """Execute API request with budget check, throttling, and exponential backoff on 429/5xx."""
         self._check_budget()
+        self._throttle()
 
         max_attempts = 3
         delay = 1.0
@@ -107,6 +143,9 @@ class LLMOpenAICompatProvider(LLMProvider):
                 raw_text, usage = call_fn()
                 in_tok = usage.get("input_tokens", 0)
                 out_tok = usage.get("output_tokens", 0)
+                tot_tok = usage.get("total_tokens", in_tok + out_tok)
+                self._tokens_this_minute += tot_tok
+
                 cost = calculate_cost(self.model, in_tok, out_tok, settings.prices_path)
 
                 self.request_count += 1
@@ -114,18 +153,33 @@ class LLMOpenAICompatProvider(LLMProvider):
 
                 self.provenance.input_tokens = in_tok
                 self.provenance.output_tokens = out_tok
-                self.provenance.total_tokens = in_tok + out_tok
+                self.provenance.total_tokens = tot_tok
                 self.provenance.cost_usd = cost
 
                 return raw_text
 
-            except (RateLimitError, InternalServerError, APIConnectionError) as e:
+            except RateLimitError as e:
+                # Extract Retry-After header if present
+                retry_after = getattr(e, "retry_after", None)
+                sleep_sec = float(retry_after) if retry_after else delay
+                logger.warning(
+                    "Rate limit hit (429) on attempt %d/%d. Waiting %.1fs (Retry-After)...",
+                    attempt,
+                    max_attempts,
+                    sleep_sec,
+                )
+                if attempt == max_attempts:
+                    raise RuntimeError(f"Rate limit exceeded after {max_attempts} attempts: {e}") from e
+                time.sleep(sleep_sec)
+                delay *= 2.0
+            except (InternalServerError, APIConnectionError) as e:
                 logger.warning(
                     "LLM request error (%s) on attempt %d/%d: %s. Backing off %.1fs...",
                     type(e).__name__,
                     attempt,
                     max_attempts,
                     e,
+                    delay,
                 )
                 if attempt == max_attempts:
                     raise
@@ -133,15 +187,18 @@ class LLMOpenAICompatProvider(LLMProvider):
                 delay *= 2.0
             except httpx.HTTPStatusError as e:
                 if e.response.status_code in (429, 500, 502, 503, 504):
+                    retry_hdr = e.response.headers.get("retry-after")
+                    wait = float(retry_hdr) if retry_hdr and retry_hdr.isdigit() else delay
                     logger.warning(
                         "LLM HTTP %d on attempt %d/%d. Backing off %.1fs...",
                         e.response.status_code,
                         attempt,
                         max_attempts,
+                        wait,
                     )
                     if attempt == max_attempts:
                         raise
-                    time.sleep(delay)
+                    time.sleep(wait)
                     delay *= 2.0
                 else:
                     raise
@@ -245,11 +302,17 @@ class LLMOpenAICompatProvider(LLMProvider):
         json_mode: bool = False,
     ) -> tuple[str, dict[str, int], ProvenanceRecord]:
         """Send completion request (text only or text+images) and return text, token usage, provenance."""
+        if images and self.text_only:
+            raise ValueError(
+                f"Model '{self.model}' is configured as text-only (LLM_TEXT_ONLY=1 or MAX_IMAGES_PER_REQUEST=0). "
+                "Cannot process multimodal image requests."
+            )
+
         messages: list[dict[str, Any]] = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
 
-        if images:
+        if images and not self.text_only:
             # Enforce max images limit per request
             limited_images = images[: settings.max_images_per_request]
             content: list[dict[str, Any]] = [{"type": "text", "text": prompt}]
@@ -278,6 +341,12 @@ class LLMOpenAICompatProvider(LLMProvider):
         video_hash: str = "unknown",
     ) -> tuple[SOP, ProvenanceRecord]:
         """Generate structured SOP from video frames with JSON schema validation and retry."""
+        if self.text_only:
+            raise ValueError(
+                f"Cannot build SOP from video frames: model '{self.model}' is text-only. "
+                "Use 'stepproof load-sop <file.json>' to load a handwritten SOP instead."
+            )
+
         limited_frames = frames[: settings.max_images_per_request]
         content: list[dict[str, Any]] = [{"type": "text", "text": prompt}]
 
@@ -318,7 +387,6 @@ class LLMOpenAICompatProvider(LLMProvider):
         learner_action_desc: str = "",
     ) -> tuple[dict[str, Any], ProvenanceRecord]:
         """Ask LLM to judge whether step is complete, incomplete, or wrong."""
-        b64_jpeg = _image_to_base64_jpeg(frame)
         evidence_summary = [
             {
                 "object": ev.object,
@@ -330,35 +398,64 @@ class LLMOpenAICompatProvider(LLMProvider):
             for ev in evidence
         ]
 
-        judge_prompt = (
-            f"Step Specification:\n"
-            f"- Step ID: {step.id}\n"
-            f"- Instruction: {step.instruction}\n"
-            f"- Expected End State: {step.expected_end_state}\n"
-            f"- Objects: {', '.join(step.objects)}\n"
-            f"- Grounding Evidence: {json.dumps(evidence_summary)}\n"
-            f"{'- Learner Action: ' + learner_action_desc if learner_action_desc else ''}\n\n"
-            f"Evaluate if this step has been completed correctly according to the end state.\n"
-            f"Return JSON strictly with the format:\n"
-            f'{{"passed": true|false, "reason": "concise explanation", "confidence": float 0.0-1.0, "failed_rules": ["rule description"]}}'
-        )
-
-        messages = [
-            {
-                "role": "system",
-                "content": "You are a quality assurance judge reviewing step completion from video evidence.",
-            },
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": judge_prompt},
-                    {
-                        "type": "image_url",
-                        "image_url": {"url": f"data:image/jpeg;base64,{b64_jpeg}"},
-                    },
-                ],
-            },
+        rules_summary = [
+            {"type": c.type, "object": c.object, "value": c.value}
+            for c in step.checks
         ]
+
+        if self.text_only:
+            prompt_version = "judge_text_v1"
+            judge_prompt = (
+                f"Step Specification (Text-Only Quality Audit):\n"
+                f"- Step ID: {step.id}\n"
+                f"- Instruction: {step.instruction}\n"
+                f"- Expected End State: {step.expected_end_state}\n"
+                f"- Required Objects: {', '.join(step.objects)}\n"
+                f"- Validation Rules: {json.dumps(rules_summary)}\n"
+                f"- Grounding Evidence from Segmentation: {json.dumps(evidence_summary)}\n"
+                f"{'- Learner Action: ' + learner_action_desc if learner_action_desc else ''}\n\n"
+                f"Evaluate whether the grounding evidence satisfies the step's expected end state and rules.\n"
+                f"Return JSON strictly with format:\n"
+                f'{{"passed": true|false, "reason": "concise explanation", "confidence": float 0.0-1.0, "failed_rules": ["rule description"]}}'
+            )
+            messages = [
+                {
+                    "role": "system",
+                    "content": "You are a quality assurance judge evaluating step completion based on structured grounding evidence.",
+                },
+                {"role": "user", "content": judge_prompt},
+            ]
+        else:
+            prompt_version = "judge_image_v1"
+            b64_jpeg = _image_to_base64_jpeg(frame)
+            judge_prompt = (
+                f"Step Specification:\n"
+                f"- Step ID: {step.id}\n"
+                f"- Instruction: {step.instruction}\n"
+                f"- Expected End State: {step.expected_end_state}\n"
+                f"- Objects: {', '.join(step.objects)}\n"
+                f"- Grounding Evidence: {json.dumps(evidence_summary)}\n"
+                f"{'- Learner Action: ' + learner_action_desc if learner_action_desc else ''}\n\n"
+                f"Evaluate if this step has been completed correctly according to the end state.\n"
+                f"Return JSON strictly with the format:\n"
+                f'{{"passed": true|false, "reason": "concise explanation", "confidence": float 0.0-1.0, "failed_rules": ["rule description"]}}'
+            )
+            messages = [
+                {
+                    "role": "system",
+                    "content": "You are a quality assurance judge reviewing step completion from video evidence.",
+                },
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": judge_prompt},
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": f"data:image/jpeg;base64,{b64_jpeg}"},
+                        },
+                    ],
+                },
+            ]
 
         def _fetch_judgment() -> dict[str, Any]:
             raw_text = self._call_completion(messages, json_mode=True)
