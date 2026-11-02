@@ -16,7 +16,59 @@ StepProof is designed around a **free-first, Meta-compliant architecture**:
 
 ---
 
-##  Prerequisites
+## 🏗️ Architecture & Pipeline
+
+```mermaid
+flowchart TD
+    subgraph Ingest["1. Video Ingest & Preprocessing"]
+        EV[Expert Video] --> FFMPEG_EXP[ffmpeg Sampler ~2fps]
+        LV[Learner Video] --> FFMPEG_LRN[ffmpeg Sampler ~2fps]
+        FFMPEG_EXP --> EXP_FRAMES[Keyframes]
+        FFMPEG_LRN --> LRN_FRAMES[Sampled Frames]
+    end
+
+    subgraph SOP_Gen["2. SOP Generation (Meta Multimodal VLM)"]
+        EXP_FRAMES --> SOP_BLD[SOP Builder / Muse Wonder / Muse Glimmer]
+        SOP_MANUAL[Handwritten SOP breadboard_led.json] --> LOAD_SOP[stepproof load-sop]
+        SOP_BLD --> GOLDEN_SOP[Golden SOP Schema JSON]
+        LOAD_SOP --> GOLDEN_SOP
+    end
+
+    subgraph Grounding["3. Object Grounding & Spatial Reference"]
+        GOLDEN_SOP --> SEG_ENG[Segmentation Provider]
+        EXP_FRAMES --> SEG_ENG
+        SEG_ENG --> SAM[SAM 3.1 / Hosted Meta API / Local Weights]
+        SEG_ENG --> COLOR_DEV[Dev Color / Contour HSV Segmenter]
+        SAM --> REF_BOUNDS[Grounding Reference & Bounding Boxes]
+        COLOR_DEV --> REF_BOUNDS
+    end
+
+    subgraph Verification["4. Robust State Machine Checker"]
+        LRN_FRAMES --> MOTION[Motion Difference Filter]
+        MOTION --> ACTIVE_ONLY[Active & Next Step Evaluation]
+        ACTIVE_ONLY --> RULE_EVAL[Calibration Rules: Present, Count, Position]
+        RULE_EVAL --> SMOOTH[Temporal Smoothing: Tolerates Hand Occlusion]
+        SMOOTH --> JUDGE_GATE{Rules Ambiguous or About to Flag?}
+        JUDGE_GATE -- Yes --> LLM_JUDGE[Judge: Text/Image LLM QA]
+        JUDGE_GATE -- No / Pass --> STATE_TRANS[State Machine: DONE / FLAGGED]
+        LLM_JUDGE --> MERGE_RULE[Merge Resolution: needs_review]
+        MERGE_RULE --> STATE_TRANS
+    end
+
+    subgraph Output["5. Audit, UI & Provenance"]
+        STATE_TRANS --> SQLITE_CACHE[(SQLite Provenance Cache)]
+        STATE_TRANS --> OVERLAYS[Evidence Frame Overlays]
+        STATE_TRANS --> STREAMLIT[Streamlit 4-Tab Projector UI]
+        STATE_TRANS --> EVAL_REP[eval_report.md & eval_results.json]
+    end
+```
+
+### Meta Models Used & Roles
+- **SAM 3.1** (`sam-3.1` via Meta Model API or local `facebookresearch/sam3`): Pixel-accurate promptable segmentation and bounding box detection for parts (resistors, LEDs, jumper wires, blocks).
+- **Muse Wonder 1.0** (`muse-wonder-1.0` via Meta Model API): Multimodal reasoning engine for procedural understanding and SOP rule synthesis from demonstration video.
+- **Muse Spark 1.3** (`muse-spark-1.3`): Fast agentic judge model for ambiguous step resolution and verification.
+- **Muse Glimmer 30B** (`meta/muse-glimmer-30b`): Distilled open-weights model for local / on-premise execution without cloud data exfiltration.
+- **Dev Stand-ins (Strictly Non-Meta, `meta_compliant=false`)**: Groq text-only Llama (`llama-3.3-70b-versatile`) and HSV color segmenter for rapid zero-cost offline development. Refused whenever `STEPPROOF_REQUIRE_META=1`.
 
 - **Python 3.11+**
 - **ffmpeg** (system executable): StepProof uses `ffmpeg` for video decoding, downsampling, and keyframe extraction.
