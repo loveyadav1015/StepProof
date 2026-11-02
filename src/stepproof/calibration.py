@@ -129,3 +129,39 @@ def profile_video_evidence(
                 }
 
     return stats
+
+
+def export_draft_calibration_yaml(
+    stats: dict[str, Any],
+    output_path: Path | str = "calibration.yaml",
+) -> Path:
+    """Write draft calibration.yaml populated with profiled thresholds."""
+    out_p = Path(output_path)
+    objects_dict: dict[str, Any] = {}
+
+    for step_id, step_data in stats.items():
+        objs = step_data.get("objects", {})
+        for obj_name, obj_stat in objs.items():
+            min_area = int(obj_stat.get("recommended_min_area", 200))
+            min_conf = float(obj_stat.get("recommended_min_conf", 0.50))
+            objects_dict[obj_name] = {
+                "min_mask_area_px": max(50, min_area),
+                "min_confidence": min_conf,
+                "expected_count": 1,
+                "position_tolerance_px": 20,
+            }
+
+    draft_config = {
+        "default": {
+            "min_mask_area_px": 200,
+            "min_confidence": 0.50,
+            "expected_count": 1,
+            "position_tolerance_px": 20,
+        },
+        "objects": objects_dict,
+    }
+
+    with open(out_p, "w", encoding="utf-8") as f:
+        yaml.dump(draft_config, f, sort_keys=False, default_flow_style=False)
+
+    return out_p

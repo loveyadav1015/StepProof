@@ -10,6 +10,7 @@ from stepproof.provenance import assert_meta_compliant
 from stepproof.providers.base import LLMProvider, SegmentationProvider
 from stepproof.providers.llm_mock import LLMMockProvider
 from stepproof.providers.llm_openai_compat import LLMOpenAICompatProvider
+from stepproof.providers.seg_dev_color import SegDevColorProvider
 from stepproof.providers.seg_local_sam import SegLocalSAMProvider
 from stepproof.providers.seg_meta_api import SegMetaAPIProvider
 from stepproof.providers.seg_mock import SegMockProvider
@@ -80,6 +81,8 @@ def get_seg_provider(
     provider: SegmentationProvider
     if selected == "mock":
         provider = SegMockProvider()
+    elif selected in ("dev_color", "color", "hsv"):
+        provider = SegDevColorProvider()
     elif selected in ("local_sam", "sam_local", "sam3"):
         provider = SegLocalSAMProvider()
     elif selected in ("meta_api", "sam_meta_api"):

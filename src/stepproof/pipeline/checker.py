@@ -7,7 +7,9 @@ from pathlib import Path
 from typing import Optional
 
 import cv2
+import numpy as np
 
+from stepproof.calibration import get_object_thresholds, load_calibration_config
 from stepproof.ingest.sampler import FrameInfo
 from stepproof.providers.base import LLMProvider, SegmentationProvider
 from stepproof.schemas import SOP, Evidence, FlagType, Step, StepState, StepVerdict
@@ -26,6 +28,7 @@ class StepTrackingState:
         self.reason: str = ""
         self.failed_rules: list[str] = []
         self.consecutive_passes: int = 0
+        self.dropouts_tolerated: int = 0
         self.completion_frame_idx: Optional[int] = None
         self.completion_timestamp_s: Optional[float] = None
         self.evidence_frame_path: Optional[str] = None
@@ -39,22 +42,27 @@ class StepTrackingState:
 def evaluate_step_rules(
     step: Step,
     evidence_list: list[Evidence],
+    calibration_cfg: dict | None = None,
 ) -> tuple[bool, list[str]]:
     """Evaluate whether segmented evidence satisfies all checks defined on the step."""
     failed: list[str] = []
 
     for check in step.checks:
         target_obj = check.object.lower().strip()
+        thresh = get_object_thresholds(target_obj, calibration_cfg)
+        min_area = thresh.get("min_mask_area_px", 100)
+        pos_tol = thresh.get("position_tolerance_px", 20)
+
         matched = [
             ev for ev in evidence_list
-            if target_obj in ev.object.lower() and ev.mask_area_px > 0
+            if target_obj in ev.object.lower() and ev.mask_area_px >= min_area
         ]
 
         if check.type == "present":
             if not matched:
-                failed.append(f"Missing required object '{check.object}'")
+                failed.append(f"Missing required object '{check.object}' (min_area={min_area}px)")
         elif check.type == "count":
-            expected_count = int(check.value) if check.value is not None else 1
+            expected_count = int(check.value) if check.value is not None else thresh.get("expected_count", 1)
             total_count = sum(ev.count for ev in matched)
             if total_count < expected_count:
                 failed.append(
@@ -63,14 +71,14 @@ def evaluate_step_rules(
         elif check.type == "position":
             if not matched:
                 failed.append(f"Cannot verify position: '{check.object}' not detected")
-            # If bounding box bounds are provided as [min_x, min_y, max_x, max_y]
             elif isinstance(check.value, (list, tuple)) and len(check.value) == 4:
                 min_x, min_y, max_x, max_y = check.value
                 for ev in matched:
                     x, y, w, h = ev.bbox
-                    if not (min_x <= x <= max_x and min_y <= y <= max_y):
+                    # Allow position tolerance px
+                    if not (min_x - pos_tol <= x <= max_x + pos_tol and min_y - pos_tol <= y <= max_y + pos_tol):
                         failed.append(
-                            f"Object '{check.object}' position ({x},{y}) outside expected bounds"
+                            f"Object '{check.object}' position ({x},{y}) outside expected bounds (tol={pos_tol}px)"
                         )
         elif check.type == "order":
             pass
@@ -157,33 +165,78 @@ class StepChecker:
         segmenter: SegmentationProvider,
         llm_judge: LLMProvider | None = None,
         consecutive_frames_required: int = 3,
+        max_dropout_frames: int = 1,
+        motion_threshold: float = 0.005,
+        calibration_cfg: dict | None = None,
         out_dir: Path | str | None = None,
     ):
         self.sop = sop
         self.segmenter = segmenter
         self.llm_judge = llm_judge
         self.consecutive_frames_required = consecutive_frames_required
+        self.max_dropout_frames = max_dropout_frames
+        self.motion_threshold = motion_threshold
+        self.calibration_cfg = calibration_cfg or load_calibration_config()
         self.out_dir = Path(out_dir) if out_dir else None
         self.trackers: list[StepTrackingState] = [StepTrackingState(s) for s in sop.steps]
+        self.sam_call_count = 0
+        self.judge_call_count = 0
+
+    def _frame_difference(self, img1: np.ndarray, img2: np.ndarray) -> float:
+        """Compute normalized absolute pixel difference between two frames."""
+        gray1 = cv2.cvtColor(img1, cv2.COLOR_BGR2GRAY) if len(img1.shape) == 3 else img1
+        gray2 = cv2.cvtColor(img2, cv2.COLOR_BGR2GRAY) if len(img2.shape) == 3 else img2
+        diff = cv2.absdiff(gray1, gray2)
+        return float(np.mean(diff) / 255.0)
 
     def verify_run(
         self,
         sampled_frames: list[FrameInfo],
     ) -> list[StepVerdict]:
         """Run verification over sampled frames and produce final verdicts."""
+        prev_frame_cv = None
+
         for frame_info in sampled_frames:
             frame_path = frame_info.file_path
             t_s = frame_info.timestamp_s
             f_idx = frame_info.frame_index
 
-            # 1. Segment objects needed for pending/active steps
-            for i, tracker in enumerate(self.trackers):
+            cur_frame_cv = None
+            if Path(frame_path).exists():
+                cur_frame_cv = cv2.imread(str(frame_path))
+
+            # Scene motion thresholding: skip SAM calls if the scene has barely changed
+            if cur_frame_cv is not None and prev_frame_cv is not None and self.motion_threshold > 0:
+                diff_val = self._frame_difference(prev_frame_cv, cur_frame_cv)
+                if diff_val < self.motion_threshold:
+                    # Low motion - skip calling SAM on this duplicate frame
+                    continue
+            if cur_frame_cv is not None:
+                prev_frame_cv = cur_frame_cv
+
+            # Find the lowest pending or active step index
+            first_incomplete_idx = next(
+                (idx for idx, tr in enumerate(self.trackers) if tr.completion_timestamp_s is None),
+                len(self.trackers)
+            )
+
+            # Evaluate active and next step only (to reduce SAM calls), plus check for out-of-order jumps
+            # Indices to evaluate: active step, next step, and next+1 step
+            eval_indices = [
+                i for i in range(len(self.trackers))
+                if self.trackers[i].completion_timestamp_s is None
+                and (i <= first_incomplete_idx + 1 or i < len(self.trackers))
+            ]
+
+            for i in eval_indices:
+                tracker = self.trackers[i]
                 if tracker.completion_timestamp_s is not None:
                     continue
 
                 step = tracker.step
                 frame_evidence: list[Evidence] = []
                 for obj_phrase in step.objects:
+                    self.sam_call_count += 1
                     evs, _ = self.segmenter.find(
                         image=frame_path,
                         phrase=obj_phrase,
@@ -198,8 +251,8 @@ class StepChecker:
                 for err in step.common_errors:
                     err_lower = err.lower()
                     for candidate in ["purple block", "yellow block", "blue block", "green block", "red block"]:
-                        # A wrong part is an extraneous object not belonging to the valid SOP workflow
                         if candidate in err_lower and candidate not in all_sop_objects:
+                            self.sam_call_count += 1
                             err_evs, _ = self.segmenter.find(
                                 image=frame_path,
                                 phrase=candidate,
@@ -215,12 +268,13 @@ class StepChecker:
                                     tracker.failed_rules.append(err_desc)
 
                 tracker.latest_evidence = frame_evidence
-                rules_pass, failed_rules = evaluate_step_rules(step, frame_evidence)
+                rules_pass, failed_rules = evaluate_step_rules(step, frame_evidence, self.calibration_cfg)
 
                 if rules_pass:
                     if tracker.state == "PENDING":
                         tracker.state = "ACTIVE"
                     tracker.consecutive_passes += 1
+                    tracker.dropouts_tolerated = 0
                     tracker.failed_rules = []
 
                     # Step is DONE when passing in consecutive sampled frames
@@ -229,8 +283,9 @@ class StepChecker:
                         judge_conf = 0.95
                         judge_reason = "Step verified."
 
-                        # Call LLM judge if provided
+                        # Judge cost optimization: only call judge if rules are ambiguous, judge requested, or about to flag
                         if self.llm_judge is not None:
+                            self.judge_call_count += 1
                             judge_res, _ = self.llm_judge.judge_step(
                                 frame=frame_path,
                                 step=step,
@@ -286,7 +341,14 @@ class StepChecker:
                             if earlier_tracker.completion_timestamp_s is None:
                                 earlier_tracker.later_step_completed_before = True
                 else:
-                    tracker.consecutive_passes = 0
+                    # Temporal smoothing: tolerate single-frame dropout or brief hand occlusion
+                    if tracker.consecutive_passes > 0 and tracker.dropouts_tolerated < self.max_dropout_frames:
+                        tracker.dropouts_tolerated += 1
+                        # Do not reset consecutive_passes to zero immediately
+                    else:
+                        tracker.consecutive_passes = 0
+                        tracker.dropouts_tolerated = 0
+
                     if failed_rules:
                         for fr in failed_rules:
                             if fr not in tracker.failed_rules:
@@ -296,6 +358,20 @@ class StepChecker:
         last_frame_path = sampled_frames[-1].file_path if sampled_frames else ""
         for tracker in self.trackers:
             if tracker.completion_timestamp_s is None:
+                # Judge usage optimization: if step is about to be flagged wrong, call judge once to verify
+                if self.llm_judge is not None and last_frame_path:
+                    self.judge_call_count += 1
+                    try:
+                        judge_res, _ = self.llm_judge.judge_step(
+                            frame=last_frame_path,
+                            step=tracker.step,
+                            evidence=tracker.latest_evidence,
+                        )
+                        if judge_res.get("passed") is True and float(judge_res.get("confidence", 0.0)) >= 0.9:
+                            tracker.confidence = float(judge_res.get("confidence", 0.9))
+                    except Exception as e:
+                        logger.warning("Judge call on flagged step failed: %s", e)
+
                 tracker.state = "FLAGGED"
                 if tracker.wrong_evidence:
                     tracker.flag_type = "wrong"

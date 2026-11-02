@@ -314,3 +314,53 @@ def test_checker_needs_review_merge_rule(base_sop, monkeypatch):
     assert v1.state == "FLAGGED"
     assert v1.flag_type == "needs_review"
     assert "judge flagged" in v1.reason
+
+
+def test_checker_temporal_smoothing_tolerates_dropout(base_sop, monkeypatch):
+    """Test that temporal smoothing tolerates a 1-frame dropout (e.g. hand occlusion)."""
+    segmenter = SegMockProvider()
+
+    # Frames for Step 1: pass, dropout (occluded), pass, pass -> should complete step!
+    frames = [
+        {"t": 0.5, "present": ["red block"]},
+        {"t": 1.0, "present": []},              # 1-frame dropout / occlusion
+        {"t": 1.5, "present": ["red block"]},
+        {"t": 2.0, "present": ["red block"]},
+    ]
+
+    def mock_find(image, phrase, step_id=0, frame_index=0, timestamp_s=0.0):
+        frame_data = frames[frame_index]
+        found = []
+        for present_obj in frame_data["present"]:
+            if present_obj == phrase:
+                found.append(
+                    Evidence(
+                        step_id=step_id,
+                        frame_index=frame_index,
+                        timestamp_s=timestamp_s,
+                        object=phrase,
+                        count=1,
+                        mask_area_px=1500,
+                        bbox=[100, 100, 50, 50],
+                        confidence=0.99,
+                    )
+                )
+        return found, segmenter.get_provenance()
+
+    monkeypatch.setattr(segmenter, "find", mock_find)
+
+    from stepproof.ingest.sampler import FrameInfo
+    sampled_frames = [
+        FrameInfo(frame_index=i, original_frame_number=i * 5, timestamp_s=f["t"], file_path=f"dummy_{i}.jpg")
+        for i, f in enumerate(frames)
+    ]
+
+    checker = StepChecker(
+        base_sop,
+        segmenter=segmenter,
+        consecutive_frames_required=3,
+        max_dropout_frames=1,
+    )
+    verdicts = checker.verify_run(sampled_frames)
+    assert verdicts[0].state == "DONE"
+    assert verdicts[0].flag_type == "none"

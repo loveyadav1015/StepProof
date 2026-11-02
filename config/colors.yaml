@@ -1,0 +1,36 @@
+# StepProof HSV Color Configuration for Dev Color Segmenter
+# Ranges format: list of [ [h_min, s_min, v_min], [h_max, s_max, v_max] ]
+# H: 0-179, S: 0-255, V: 0-255
+
+objects:
+  resistor:
+    min_area_px: 80
+    ranges:
+      - [[10, 50, 40], [25, 255, 200]]  # Brown / beige resistor body
+
+  led:
+    min_area_px: 100
+    ranges:
+      - [[0, 100, 100], [10, 255, 255]]    # Red LED range 1
+      - [[170, 100, 100], [180, 255, 255]] # Red LED range 2
+
+  "red jumper wire":
+    min_area_px: 150
+    ranges:
+      - [[0, 120, 70], [10, 255, 255]]
+      - [[170, 120, 70], [180, 255, 255]]
+
+  "black jumper wire":
+    min_area_px: 150
+    ranges:
+      - [[0, 0, 0], [180, 255, 60]]  # Low value / black wire
+
+  "battery pack":
+    min_area_px: 500
+    ranges:
+      - [[0, 0, 20], [180, 80, 100]] # Dark battery pack housing
+
+  "lit led":
+    min_area_px: 80
+    ranges:
+      - [[0, 30, 220], [20, 255, 255]] # High brightness emission
