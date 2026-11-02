@@ -127,9 +127,8 @@ def render_video(
 
 def generate_all_synthetic_videos(base_dir: Path | None = None) -> dict[str, Path]:
     """Generate the full suite of expert and learner synthetic videos."""
-    root = base_dir or Path("data")
-    expert_dir = root / "expert"
-    learner_dir = root / "learner"
+    root = base_dir or Path("data/synthetic")
+    synthetic_dir = root
 
     # 1. Expert video: Red (0.5s), Green (2.0s), Blue (4.0s), Yellow (6.0s)
     expert_timeline = [
@@ -139,14 +138,14 @@ def generate_all_synthetic_videos(base_dir: Path | None = None) -> dict[str, Pat
         (6.0, 8.0, [("top", "yellow", "Y")]),
     ]
     p_expert = render_video(
-        expert_dir / "expert.mp4",
+        synthetic_dir / "expert.mp4",
         expert_timeline,
         title="EXPERT DEMO: Block Assembly",
     )
 
     # 2. Learner: Correct execution
     p_correct = render_video(
-        learner_dir / "learner_correct.mp4",
+        synthetic_dir / "learner_correct.mp4",
         expert_timeline,
         title="LEARNER: Correct Sequence",
     )
@@ -159,7 +158,7 @@ def generate_all_synthetic_videos(base_dir: Path | None = None) -> dict[str, Pat
         (5.0, 8.0, [("top", "yellow", "Y")]),
     ]
     p_skipped = render_video(
-        learner_dir / "learner_skipped.mp4",
+        synthetic_dir / "learner_skipped.mp4",
         skipped_timeline,
         title="LEARNER: Step 2 Skipped",
     )
@@ -172,7 +171,7 @@ def generate_all_synthetic_videos(base_dir: Path | None = None) -> dict[str, Pat
         (6.0, 8.0, [("top", "yellow", "Y")]),
     ]
     p_wrong = render_video(
-        learner_dir / "learner_wrong_part.mp4",
+        synthetic_dir / "learner_wrong_part.mp4",
         wrong_part_timeline,
         title="LEARNER: Wrong Part Placed",
     )
@@ -185,7 +184,7 @@ def generate_all_synthetic_videos(base_dir: Path | None = None) -> dict[str, Pat
         (6.0, 8.0, [("top", "yellow", "Y")]),
     ]
     p_ooo = render_video(
-        learner_dir / "learner_out_of_order.mp4",
+        synthetic_dir / "learner_out_of_order.mp4",
         out_of_order_timeline,
         title="LEARNER: Out of Order",
     )

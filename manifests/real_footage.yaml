@@ -1,0 +1,51 @@
+# # StepProof Evaluation Manifest - Real Footage (Breadboard LED Circuit)
+# Status: planned until files are filmed.
+name: "Breadboard LED Circuit Assembly Verification"
+sop: "data/sop/breadboard_led.json"
+
+runs:
+  - scenario: "Learner 1 - Baseline Correct"
+    video: "data/learner/learner_correct.mp4"
+    source: "real"
+    status: "planned"
+    expected_flagged_step_ids: []
+    expected_primary_flag_types: {}
+
+  - scenario: "Learner 2 - Skipped Resistor"
+    video: "data/learner/learner_skipped_resistor.mp4"
+    source: "real"
+    status: "planned"
+    expected_flagged_step_ids: [1]
+    expected_primary_flag_types:
+      1: "skipped"
+
+  - scenario: "Learner 3 - Wrong LED Color"
+    video: "data/learner/learner_wrong_led.mp4"
+    source: "real"
+    status: "planned"
+    expected_flagged_step_ids: [2]
+    expected_primary_flag_types:
+      2: "wrong"
+
+  - scenario: "Learner 4 - Out-of-Order (Black Wire Before Red)"
+    video: "data/learner/learner_out_of_order.mp4"
+    source: "real"
+    status: "planned"
+    expected_flagged_step_ids: [3]
+    expected_primary_flag_types:
+      3: "out_of_order"
+
+  - scenario: "Learner 5 - Correct Run (Different Lighting)"
+    video: "data/learner/learner_lighting.mp4"
+    source: "real"
+    status: "planned"
+    expected_flagged_step_ids: []
+    expected_primary_flag_types: {}
+
+  - scenario: "Learner 6 - Reversed LED Polarity (Stretch)"
+    video: "data/learner/learner_reversed_led.mp4"
+    source: "real"
+    status: "planned"
+    expected_flagged_step_ids: [2]
+    expected_primary_flag_types:
+      2: "wrong"

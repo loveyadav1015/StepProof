@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import time
 from pathlib import Path
@@ -12,6 +13,7 @@ import yaml
 from stepproof.config import settings
 from stepproof.ingest.sampler import sample_video
 from stepproof.pipeline.checker import StepChecker
+from stepproof.pricing import calculate_sam_cost
 from stepproof.providers.factory import get_llm_provider, get_seg_provider
 from stepproof.schemas import SOP
 
@@ -62,6 +64,8 @@ def run_evaluation(
     for run_info in runs:
         scenario = run_info["scenario"]
         video_path = Path(run_info["video"])
+        source_label = run_info.get("source", "real")
+        status_label = run_info.get("status", "ready")
         expected_ids = set(run_info.get("expected_flagged_step_ids", []))
         expected_flags = {
             int(k) if str(k).isdigit() else k: str(v)
@@ -69,7 +73,7 @@ def run_evaluation(
         }
 
         if not video_path.exists():
-            print(f"⚠️  Video file not found: {video_path}. Skipping.")
+            print(f"⚠️  [{status_label.upper()}] Video file not found: {video_path}. Skipping.")
             continue
 
         frames_dir = Path("data/outputs/eval_frames") / video_path.stem
@@ -114,11 +118,14 @@ def run_evaluation(
                 else:
                     scenario_passed = False
 
-        run_cost = (
+        llm_cost = (
             getattr(llm.get_provenance(), "cost_usd", 0.0)
             if hasattr(llm, "get_provenance")
             else 0.0
         )
+        sam_calls = checker.sam_call_count
+        sam_cost = calculate_sam_cost("sam-3.1", num_images=sam_calls) if "meta" in settings.stepproof_seg else 0.0
+        run_cost = round(llm_cost + sam_cost, 6)
         total_estimated_cost += run_cost
 
         status_str = "✅ PASS" if scenario_passed else "❌ FAIL"
@@ -126,6 +133,7 @@ def run_evaluation(
 
         results.append({
             "scenario": scenario,
+            "source": source_label,
             "status": "PASS" if scenario_passed else "FAIL",
             "expected_ids": list(expected_ids),
             "observed_ids": list(observed_flagged_ids),
@@ -133,13 +141,15 @@ def run_evaluation(
             "observed_flags": observed_flags,
             "elapsed_s": round(elapsed, 2),
             "latency_per_step_s": round(latency_per_step, 3),
-            "cost_usd": round(run_cost, 6),
+            "cost_usd": run_cost,
+            "sam_calls": sam_calls,
+            "judge_calls": checker.judge_call_count,
         })
 
         print(
-            f"{status_str} | {scenario:<38} | "
+            f"{status_str} | [{source_label.upper()}] {scenario:<34} | "
             f"Observed: {list(observed_flagged_ids)} ({list(observed_flags.values())}) | "
-            f"{elapsed:.2f}s ({latency_per_step:.2f}s/step)"
+            f"SAM: {sam_calls} calls | {elapsed:.2f}s ({latency_per_step:.2f}s/step)"
         )
 
     # Compute aggregate metrics
@@ -179,6 +189,26 @@ def run_evaluation(
     out_p.write_text(report_content, encoding="utf-8")
     print(f"\n📄 Evaluation report written to: {out_p.resolve()}")
 
+    # Save JSON results with full provenance
+    json_out_p = out_p.with_suffix(".json")
+    json_data = {
+        "suite_name": suite_name,
+        "manifest_path": str(manifest_path),
+        "sop_task": sop.task,
+        "total_scenarios": len(results),
+        "false_alarms": correct_run_false_alarms,
+        "detection_rate": detection_rate,
+        "avg_latency_step_s": avg_latency_step,
+        "avg_cost_run_usd": avg_cost_run,
+        "provenance": {
+            "seg": seg.get_provenance().model_dump() if hasattr(seg, "get_provenance") else {},
+            "llm": llm.get_provenance().model_dump() if hasattr(llm, "get_provenance") else {},
+        },
+        "results": results,
+    }
+    json_out_p.write_text(json.dumps(json_data, indent=2), encoding="utf-8")
+    print(f"📊 Evaluation JSON written to: {json_out_p.resolve()}")
+
     return {
         "results": results,
         "false_alarms": correct_run_false_alarms,
@@ -186,6 +216,7 @@ def run_evaluation(
         "avg_latency_step": avg_latency_step,
         "avg_cost_run": avg_cost_run,
         "report_path": str(out_p),
+        "json_path": str(json_out_p),
     }
 
 
@@ -206,8 +237,10 @@ def generate_eval_markdown_report(
         exp_str = f"Steps {r['expected_ids']}" if r["expected_ids"] else "None"
         obs_str = f"Steps {r['observed_ids']}" if r["observed_ids"] else "None"
         flags_str = ", ".join(f"{k}:{v}" for k, v in r["observed_flags"].items()) or "none"
+        source_badge = f"`{r.get('source', 'real')}`"
+        sam_str = f"{r.get('sam_calls', 0)}"
         rows.append(
-            f"| {r['scenario']} | {status_icon} | {exp_str} | {obs_str} | `{flags_str}` | {r['latency_per_step_s']:.3f}s | ${r['cost_usd']:.6f} |"
+            f"| {r['scenario']} | {source_badge} | {status_icon} | {exp_str} | {obs_str} | `{flags_str}` | {sam_str} | {r['latency_per_step_s']:.3f}s | ${r['cost_usd']:.6f} |"
         )
 
     table_rows = "\n".join(rows)
@@ -229,8 +262,8 @@ def generate_eval_markdown_report(
 
 ## 2. Per-Scenario Verification Outcomes
 
-| Scenario Name | Result | Expected Flags | Observed Flags | Observed Types | Latency / Step | Cost (USD) |
-| :--- | :---: | :---: | :---: | :---: | :---: | :---: |
+| Scenario Name | Source | Result | Expected Flags | Observed Flags | Observed Types | SAM Calls | Latency / Step | Cost (USD) |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
 {table_rows}
 
 ## 3. Analysis and Recommendations
