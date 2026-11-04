@@ -1,11 +1,11 @@
 # StepProof 
 
-> **Offline-first video-to-SOP generation and learner step verification engine with visual evidence.**  
+> **Offline video-to-SOP generation and learner step verification engine with visual evidence.**  
 > Built for the **Meta AI Developer Hackathon 2026**.
 
 ---
 
-## 📖 What is StepProof?
+## What is StepProof?
 
 StepProof turns a single **expert video demonstration** of a manual task into a structured Standard Operating Procedure (**SOP**) with discrete steps, target objects, expected visual end-states, and validation rules. It then analyzes a **learner's execution video**, validating physical progress and flagging **skipped**, **wrong/failed**, or **out-of-order** steps with annotated keyframe evidence.
 
@@ -16,7 +16,7 @@ StepProof is designed around a **free-first, Meta-compliant architecture**:
 
 ---
 
-## 🏗️ Architecture & Pipeline
+##  Architecture & Pipeline
 
 ```mermaid
 flowchart TD
@@ -72,7 +72,7 @@ flowchart TD
 
 ---
 
-## ⚙️ Prerequisites
+##  Prerequisites
 
 - **Python 3.11+**
 - **ffmpeg** (system executable): StepProof uses `ffmpeg` for video decoding, downsampling, and keyframe extraction.
@@ -87,7 +87,7 @@ flowchart TD
 
 ---
 
-## 🚀 Quick Start (Zero API Keys Required)
+##  Quick Start (Zero API Keys Required)
 
 StepProof is ready to run immediately using synthetic demo footage and offline mock providers.
 
@@ -146,7 +146,7 @@ StepProof implements a rigorous step state machine. Each step receives a primary
 
 ---
 
-## 🏆 Meta Model API & SAM 3.1 Integration
+##  Meta Model API & SAM 3.1 Integration
 
 > [!IMPORTANT]
 > **Meta Model Run Status**: *Meta model run pending.*  
@@ -203,7 +203,7 @@ If you have local SAM 3.1 weights:
 
 ---
 
-## 📊 Threshold Calibration & Batch Evaluation
+## Threshold Calibration & Batch Evaluation
 
 ### 1. Calibrate Object Evidence
 Tune per-object detection thresholds against reference footage before production runs:
@@ -255,7 +255,7 @@ Template manifest for custom real footage is available at `manifests/real_footag
 
 ---
 
-## 🛡️ Robustness, Budget Guards & Cost Tracking
+##  Robustness, Budget Guards & Cost Tracking
 
 StepProof prevents runaway API spend and inference failures:
 - **Cost Tracking**: Tracks real token counts (`input_tokens`, `output_tokens`) from API responses, recording exact costs in provenance records using configurable prices from [`prices.yaml`](prices.yaml) (defaults to $0.00).
@@ -266,7 +266,7 @@ StepProof prevents runaway API spend and inference failures:
 
 ---
 
-## 🔒 Meta Compliance Enforcement (`make final` & `make final-run`)
+##  Meta Compliance Enforcement (`make final` & `make final-run`)
 
 The hackathon compliance guard ensures no mock or dev stand-in results are mistakenly submitted:
 ```bash
@@ -297,7 +297,7 @@ make meta-smoke
 
 ---
 
-## 💻 Complete CLI Command Reference
+##  Complete CLI Command Reference
 
 ```bash
 # 1. Build SOP from expert demonstration video
@@ -333,7 +333,7 @@ stepproof windows <video.mp4> --sop <sop.json> [--out <windows.yaml>]
 
 ---
 
-## 📂 Repository Layout
+##  Repository Layout
 
 ```
 stepproof/
