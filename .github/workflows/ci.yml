@@ -1,0 +1,45 @@
+name: CI Quality Gate
+
+on:
+  push:
+    branches: [main, frontend, release]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Run Ruff Linter
+        run: |
+          ruff check .
+
+      - name: Run Pytest Suite (Mock & Offline Path Only)
+        run: |
+          STEPPROOF_MODE=cache_only STEPPROOF_REQUIRE_META=0 pytest tests/
+
+      - name: Verify Secrets & Credentials
+        run: |
+          python scripts/check_secrets.py
+
+      - name: Verify Static Site Builder
+        run: |
+          python scripts/build_site.py

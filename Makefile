@@ -5,7 +5,28 @@ PYTEST = $(VENV)/bin/pytest
 RUFF = $(VENV)/bin/ruff
 STREAMLIT = $(VENV)/bin/streamlit
 
-.PHONY: all install test lint app demo demo-cached final clean help secrets-check meta-smoke meta-eval site site-serve
+.PHONY: all install test lint app demo demo-cached final clean help secrets-check meta-smoke meta-eval site site-serve quickstart reproduce demo-record preflight
+
+quickstart:
+	@echo "Launching StepProof Demo Replay from offline bundle (no API key, no network required)..."
+	@STEPPROOF_MODE=cache_only STEPPROOF_REQUIRE_META=0 $(STREAMLIT) run src/stepproof/app/streamlit_app.py
+
+reproduce:
+	@echo "Regenerating StepProof demo outputs with local/configured providers..."
+	$(PYTHON) scripts/make_synthetic_video.py
+	$(PYTHON) -m stepproof build-sop data/synthetic/expert.mp4 --out data/outputs/demo_sop.json
+	$(PYTHON) -m stepproof ground data/synthetic/expert.mp4 --sop data/outputs/demo_sop.json --out-dir data/outputs/grounding
+	$(PYTHON) -m stepproof check data/synthetic/learner_correct.mp4 --sop data/outputs/demo_sop.json --out-dir data/outputs/runs/correct
+	$(PYTHON) -m stepproof check data/synthetic/learner_skipped.mp4 --sop data/outputs/demo_sop.json --out-dir data/outputs/runs/skipped
+	$(PYTHON) -m stepproof check data/synthetic/learner_wrong_part.mp4 --sop data/outputs/demo_sop.json --out-dir data/outputs/runs/wrong_part
+	$(PYTHON) -m stepproof check data/synthetic/learner_out_of_order.mp4 --sop data/outputs/demo_sop.json --out-dir data/outputs/runs/out_of_order
+
+demo-record:
+	@echo "Launching StepProof in high-visibility Demo Mode for screen recording..."
+	@STEPPROOF_MODE=cache_only STEPPROOF_REQUIRE_META=0 $(STREAMLIT) run src/stepproof/app/streamlit_app.py --server.headless=true
+
+preflight:
+	$(PYTHON) scripts/preflight.py
 
 secrets-check:
 	$(PYTHON) scripts/check_secrets.py
