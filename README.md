@@ -67,8 +67,12 @@ flowchart TD
 - **SAM 3.1** (`sam-3.1` via Meta Model API or local `facebookresearch/sam3`): Pixel-accurate promptable segmentation and bounding box detection for parts (resistors, LEDs, jumper wires, blocks).
 - **Muse Wonder 1.0** (`muse-wonder-1.0` via Meta Model API): Multimodal reasoning engine for procedural understanding and SOP rule synthesis from demonstration video.
 - **Muse Spark 1.3** (`muse-spark-1.3`): Fast agentic judge model for ambiguous step resolution and verification.
-- **Muse Glimmer 30B** (`meta/muse-glimmer-30b`): Distilled open-weights model for local / on-premise execution without cloud data exfiltration.
+- **Muse Glimmer 30B** (`meta/muse-glimmer-30b`): Distilled open-weights model for local / on-premise execution (when local weights are loaded).
 - **Dev Stand-ins (Strictly Non-Meta, `meta_compliant=false`)**: Groq text-only Llama (`llama-3.3-70b-versatile`) and HSV color segmenter for rapid zero-cost offline development. Refused whenever `STEPPROOF_REQUIRE_META=1`.
+
+---
+
+## ⚙️ Prerequisites
 
 - **Python 3.11+**
 - **ffmpeg** (system executable): StepProof uses `ffmpeg` for video decoding, downsampling, and keyframe extraction.
@@ -83,7 +87,7 @@ flowchart TD
 
 ---
 
-##  Quick Start (Zero API Keys Required)
+## 🚀 Quick Start (Zero API Keys Required)
 
 StepProof is ready to run immediately using synthetic demo footage and offline mock providers.
 
@@ -97,7 +101,7 @@ This initializes a Python 3.11 virtual environment (`.venv`), upgrades `pip`, an
 ```bash
 make test
 ```
-Runs 27 unit and integration tests covering schema validation, SQLite cache modes, rule evaluation state machines, provider factory, and CLI execution.
+Runs 48 unit and integration tests covering schema validation, SQLite cache modes, rule evaluation state machines, provider factory, and CLI execution.
 
 ### 3. Run Verification Demo
 ```bash
@@ -120,7 +124,8 @@ Replays previously verified runs strictly from the SQLite cache (`STEPPROOF_MODE
 ```bash
 make app
 ```
-Opens the interactive 3-tab dashboard at `http://localhost:8501`:
+Opens the interactive 4-tab dashboard at `http://localhost:8501`:
+- **Tab 0 (Demo Mode)**: Projector-friendly presentation view with large fonts showing expert demonstration, golden SOP, clean baseline execution, and prominent faulty execution alert with visual evidence overlays.
 - **Tab 1 (Build SOP)**: Select expert video, trigger frame extraction, inspect golden SOP checklist, and generate SAM grounding overlays.
 - **Tab 2 (Check Run)**: Select learner video (correct, skipped, wrong part, out-of-order), trigger verification, view live status ticking (`DONE` vs `FLAGGED`), inspect evidence frame callouts with overlays, and review failed rules with model explanations.
 - **Tab 3 (Report & Audit)**: Browse previous runs, inspect model provenance badges (`🟢 Meta model` vs `⚪ Dev stand-in`), examine flagged step evidence, and download `report.md` / `report.json`.
@@ -236,9 +241,9 @@ Template manifest for custom real footage is available at `manifests/real_footag
 
 | Metric | Measured Value | Benchmark Target | Status |
 | :--- | :--- | :--- | :--- |
-| **Correct-Run False Alarms** | 0 | 0 | Optimal |
-| **Detection Rate (Staged Errors)** | 100.0% (3/3) | 100% | Optimal |
-| **Average Latency Per Step** | 0.031s | < 0.500s (mock) | Sub-second |
+| **Correct-Run False Alarms** | 0 | 0 | 0 False Alarms |
+| **Detection Rate (Staged Errors)** | 100.0% (3/3) | 100% | 100% Detected |
+| **Average Latency Per Step** | 0.031s | < 0.500s (mock) | Low Latency |
 | **Estimated Cost Per Run** | $0.000000 USD | < $0.05 | Zero Spend |
 
 | Scenario Name | Result | Expected | Observed Flags & Types | Latency / Step |
@@ -253,15 +258,15 @@ Template manifest for custom real footage is available at `manifests/real_footag
 ## 🛡️ Robustness, Budget Guards & Cost Tracking
 
 StepProof prevents runaway API spend and inference failures:
-- **Cost Tracking**: Tracks real token counts (`input_tokens`, `output_tokens`) from API responses, recording exact costs in provenance records using configurable prices from [`prices.yaml`](file:///home/love/coding/meta-ai-hackathon/StepProof/prices.yaml) (defaults to $0.00).
+- **Cost Tracking**: Tracks real token counts (`input_tokens`, `output_tokens`) from API responses, recording exact costs in provenance records using configurable prices from [`prices.yaml`](prices.yaml) (defaults to $0.00).
 - **Budget Guards**: Enforces `MAX_REQUESTS_PER_RUN` (default: 50) and `MAX_COST_USD` (default: $5.00), halting runs before budget overruns.
 - **Image Budget**: Limits frames sent per LLM call via `MAX_IMAGES_PER_REQUEST` (default: 20).
-- **Automatic JSON Repair**: Automatically repairs unclosed brackets, markdown fences, and trailing commas via [`json_repair.py`](file:///home/love/coding/meta-ai-hackathon/StepProof/src/stepproof/json_repair.py) before triggering retries.
+- **Automatic JSON Repair**: Automatically repairs unclosed brackets, markdown fences, and trailing commas via [`src/stepproof/json_repair.py`](src/stepproof/json_repair.py) before triggering retries.
 - **Versioned Prompts**: All prompt templates reside in `src/stepproof/prompts/` (`sop_v1.txt`, `judge_v1.txt`) and are integrated directly into deterministic cache keys.
 
 ---
 
-##  Meta Compliance Enforcement (`make final`)
+## 🔒 Meta Compliance Enforcement (`make final` & `make final-run`)
 
 The hackathon compliance guard ensures no mock or dev stand-in results are mistakenly submitted:
 ```bash
@@ -280,9 +285,19 @@ When `STEPPROOF_REQUIRE_META=1` is active:
    ================================================================================
    ```
 
+To execute the full real manifest under strict Meta compliance:
+```bash
+make final-run
+```
+
+To run non-destructive smoke tests verifying connectivity and special token parsing against live Meta endpoints:
+```bash
+make meta-smoke
+```
+
 ---
 
-##  Complete CLI Command Reference
+## 💻 Complete CLI Command Reference
 
 ```bash
 # 1. Build SOP from expert demonstration video
@@ -305,28 +320,40 @@ stepproof report <run_dir> [--out report.md]
 
 # 7. Replay run from cache with Meta compliance check
 stepproof replay <run_dir> [--require-meta]
+
+# 8. Check manifest footage health (duration, exposure, camera shake)
+stepproof doctor <manifest.yaml>
+
+# 9. Detailed segmentation inspection and tuning timeline
+stepproof inspect <video.mp4> --sop <sop.json> [--out <output_dir>]
+
+# 10. Propose step timing windows from video
+stepproof windows <video.mp4> --sop <sop.json> [--out <windows.yaml>]
 ```
 
 ---
 
-##  Repository Layout
+## 📂 Repository Layout
 
 ```
 stepproof/
 ├── pyproject.toml                  # Project packaging, CLI scripts, dependencies
-├── Makefile                        # Targets: install, test, lint, app, demo, demo-cached, final
-├── .env.example                    # Environment variable template with verified Meta model IDs
+├── Makefile                        # Targets: install, test, lint, app, demo, demo-cached, final, final-run, meta-smoke, preflight
+├── .env.example                    # Environment variable template with planned Meta model IDs
 ├── prices.yaml                     # Model pricing per 1k tokens for cost tracking
 ├── calibration.yaml                # Per-object segmentation thresholds
 ├── manifests/
 │   ├── synthetic_manifest.yaml     # Benchmark manifest for synthetic runs
+│   ├── real_footage.yaml           # Manifest for real footage evaluations
 │   └── real_footage_template.yaml  # Template for real footage evaluations
 ├── scripts/
 │   ├── make_synthetic_video.py     # Synthetic video dataset generator
 │   ├── smoke_meta.py               # Meta Model API LLM smoke test
-│   └── smoke_sam.py                # Hosted SAM 3.1 smoke test
+│   ├── smoke_sam.py                # Hosted SAM 3.1 smoke test
+│   ├── meta_eval.py                # Interactive budget confirmation and Meta run driver
+│   └── preflight.py                # Submission readiness quality gate
 ├── src/stepproof/
-│   ├── __main__.py                 # CLI commands (build-sop, ground, check, calibrate, eval, report, replay)
+│   ├── __main__.py                 # CLI commands (build-sop, ground, check, calibrate, eval, report, replay, doctor, inspect, windows)
 │   ├── config.py                   # Pydantic environment configuration & budget limits
 │   ├── schemas.py                  # Pydantic schemas (SOP, Check, Evidence, Verdict, Report)
 │   ├── provenance.py               # ProvenanceRecord tracking & Meta compliance guards
@@ -354,8 +381,8 @@ stepproof/
 │   │   ├── checker.py              # Step state machine, disambiguation & visual overlays
 │   │   └── report.py               # RunReport export & Markdown report generator
 │   └── app/
-│       └── streamlit_app.py        # 3-tab interactive web dashboard with flagged step audit
-└── tests/                          # 27 unit & integration tests (100% offline)
+│       └── streamlit_app.py        # 4-tab interactive web dashboard with flagged step audit
+└── tests/                          # 48 unit & integration tests (100% offline)
 ```
 
 ---
