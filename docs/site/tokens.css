@@ -1,0 +1,111 @@
+:root {
+  /* Design Tokens from landing-page-design skill */
+  
+  /* Color Palette - Flat, High Contrast (No Gradients for Backgrounds) */
+  --bg-primary: #0a0a0a;
+  --bg-surface: #181818;
+  --bg-surface-elevated: #1f1f1f;
+  --bg-surface-hover: #272727;
+  
+  --border-subtle: #272727;
+  --border-strong: #383838;
+  --border-focus: #4f46e5;
+
+  --text-primary: #f5f5f5;
+  --text-secondary: #a3a3a3;
+  --text-muted: #737373;
+  --text-dim: #525252;
+  --text-inverse: #0a0a0a;
+
+  --accent: #3b82f6;
+  --accent-hover: #2563eb;
+  --accent-text: #60a5fa;
+
+  --status-success: #10b981;
+  --status-warning: #f59e0b;
+  --status-danger: #ef4444;
+  --status-neutral: #64748b;
+
+  /* Typography - Geist / System Fonts (No Italics, Semibold Max) */
+  --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+
+  /* Type Scale Snap (B1 Type Scale) */
+  --text-xs: 0.75rem;     /* 12px / 16px */
+  --line-xs: 1rem;
+  --text-sm: 0.875rem;    /* 14px / 20px */
+  --line-sm: 1.25rem;
+  --text-base: 1rem;      /* 16px / 24px */
+  --line-base: 1.5rem;
+  --text-lg: 1.125rem;    /* 18px / 28px */
+  --line-lg: 1.75rem;
+  --text-xl: 1.25rem;     /* 20px / 28px */
+  --line-xl: 1.75rem;
+  --text-2xl: 1.5rem;     /* 24px / 32px */
+  --line-2xl: 2rem;
+  --text-3xl: 1.875rem;   /* 30px / 36px */
+  --line-3xl: 2.25rem;
+  --text-4xl: 2.25rem;    /* 36px / 40px */
+  --line-4xl: 2.5rem;
+  --text-5xl: 3rem;       /* 48px / 48px */
+  --line-5xl: 3rem;
+  --text-6xl: 3.75rem;    /* 60px / 60px */
+  --line-6xl: 3.75rem;
+
+  /* Font Weights (Max Semibold) */
+  --font-regular: 400;
+  --font-medium: 500;
+  --font-semibold: 600;
+
+  /* Spacing Scale (B2 Strict Values) */
+  --spacing-0: 0px;
+  --spacing-25: 2px;
+  --spacing-50: 4px;
+  --spacing-75: 8px;
+  --spacing-100: 12px;
+  --spacing-200: 16px;
+  --spacing-300: 24px;
+  --spacing-400: 32px;
+  --spacing-500: 40px;
+  --spacing-600: 48px;
+  --spacing-700: 64px;
+  --spacing-800: 80px;
+  --spacing-900: 96px;
+
+  /* Corner Radius (B3) */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-2xl: 16px;
+  --radius-full: 9999px;
+
+  /* Motion (B7 Base Curve) */
+  --ease-base: cubic-bezier(0.22, 1, 0.36, 1);
+  --duration-normal: 500ms;
+  --duration-hover: 300ms;
+}
+
+/* Light Theme Variables */
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg-primary: #ffffff;
+    --bg-surface: #f8fafc;
+    --bg-surface-elevated: #f1f5f9;
+    --bg-surface-hover: #e2e8f0;
+
+    --border-subtle: #e2e8f0;
+    --border-strong: #cbd5e1;
+    --border-focus: #4f46e5;
+
+    --text-primary: #0f172a;
+    --text-secondary: #475569;
+    --text-muted: #64748b;
+    --text-dim: #94a3b8;
+    --text-inverse: #ffffff;
+
+    --accent: #2563eb;
+    --accent-hover: #1d4ed8;
+    --accent-text: #1d4ed8;
+  }
+}

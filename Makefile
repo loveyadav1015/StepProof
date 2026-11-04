@@ -5,10 +5,18 @@ PYTEST = $(VENV)/bin/pytest
 RUFF = $(VENV)/bin/ruff
 STREAMLIT = $(VENV)/bin/streamlit
 
-.PHONY: all install test lint app demo demo-cached final clean help secrets-check meta-smoke meta-eval
+.PHONY: all install test lint app demo demo-cached final clean help secrets-check meta-smoke meta-eval site site-serve
 
 secrets-check:
 	$(PYTHON) scripts/check_secrets.py
+
+site:
+	@echo "Building static landing page..."
+	$(PYTHON) scripts/build_site.py
+
+site-serve: site
+	@echo "Serving static documentation site at http://localhost:8000..."
+	cd docs/site && $(PYTHON) -m http.server 8000
 
 meta-smoke:
 	@echo "Running Meta API & SAM smoke tests with MAX_COST_USD=0.50..."
