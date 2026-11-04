@@ -1,0 +1,121 @@
+{
+  "task": "Colored Block Assembly",
+  "steps": [
+    {
+      "id": 1,
+      "instruction": "Place the red block in the left assembly slot.",
+      "objects": [
+        "red block"
+      ],
+      "expected_end_state": "Red block resting steadily in the left slot.",
+      "checks": [
+        {
+          "type": "present",
+          "object": "red block",
+          "value": 1
+        },
+        {
+          "type": "count",
+          "object": "red block",
+          "value": 1
+        }
+      ],
+      "common_errors": [
+        "Skipping red block",
+        "Using purple block instead"
+      ],
+      "start_s": 0.5,
+      "end_s": 2.0
+    },
+    {
+      "id": 2,
+      "instruction": "Place the green block in the center assembly slot.",
+      "objects": [
+        "green block"
+      ],
+      "expected_end_state": "Green block positioned directly adjacent to red block in center slot.",
+      "checks": [
+        {
+          "type": "present",
+          "object": "green block",
+          "value": 1
+        },
+        {
+          "type": "count",
+          "object": "green block",
+          "value": 1
+        }
+      ],
+      "common_errors": [
+        "Skipping green block",
+        "Using purple block instead",
+        "Placing blue block first"
+      ],
+      "start_s": 2.0,
+      "end_s": 4.0
+    },
+    {
+      "id": 3,
+      "instruction": "Place the blue block in the right assembly slot.",
+      "objects": [
+        "blue block"
+      ],
+      "expected_end_state": "Blue block resting in right slot.",
+      "checks": [
+        {
+          "type": "present",
+          "object": "blue block",
+          "value": 1
+        },
+        {
+          "type": "count",
+          "object": "blue block",
+          "value": 1
+        }
+      ],
+      "common_errors": [
+        "Skipping blue block",
+        "Placing out of sequence"
+      ],
+      "start_s": 4.0,
+      "end_s": 6.0
+    },
+    {
+      "id": 4,
+      "instruction": "Place the yellow block on top as the lock piece.",
+      "objects": [
+        "yellow block"
+      ],
+      "expected_end_state": "Yellow block placed on top forming completed assembly.",
+      "checks": [
+        {
+          "type": "present",
+          "object": "yellow block",
+          "value": 1
+        },
+        {
+          "type": "count",
+          "object": "yellow block",
+          "value": 1
+        }
+      ],
+      "common_errors": [
+        "Skipping lock piece"
+      ],
+      "start_s": 6.0,
+      "end_s": 8.0
+    }
+  ],
+  "source_video_hash": "98a354cd77a79e44e532bd439ba9a3976852fdc4d6281f96379e235fd3ce32e5",
+  "created_with": {
+    "provider": "mock",
+    "model_name": "mock-vision-sop",
+    "base_url_host": "localhost",
+    "timestamp": "2026-10-28T20:31:17.986486+00:00",
+    "meta_compliant": false,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "total_tokens": 0,
+    "cost_usd": 0.0
+  }
+}

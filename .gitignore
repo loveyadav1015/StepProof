@@ -74,3 +74,4 @@ checkpoints/
 .agents
 skills-lock.json
 artifacts/
+video_build/

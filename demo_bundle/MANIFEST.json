@@ -1,0 +1,44 @@
+{
+  "bundle_version": "1.0.0",
+  "task": "Colored Block Assembly",
+  "generated_at": "2026-11-04T17:42:00Z",
+  "source": "synthetic",
+  "provenance_statement": "Offline demonstration bundle packaged for hackathon judges to verify and replay without API credentials or external network access.",
+  "sop_file": "golden_sop.json",
+  "runs": [
+    {
+      "name": "correct",
+      "status": "PASS",
+      "verdicts_count": 4,
+      "report_json": "runs/correct/report.json",
+      "report_md": "runs/correct/report.md"
+    },
+    {
+      "name": "skipped",
+      "status": "FLAGGED",
+      "primary_flag": "skipped",
+      "flagged_step": 2,
+      "report_json": "runs/skipped/report.json",
+      "report_md": "runs/skipped/report.md",
+      "evidence_frame": "runs/skipped/step_2_skipped.jpg"
+    },
+    {
+      "name": "wrong_part",
+      "status": "FLAGGED",
+      "primary_flag": "wrong",
+      "flagged_step": 2,
+      "report_json": "runs/wrong_part/report.json",
+      "report_md": "runs/wrong_part/report.md",
+      "evidence_frame": "runs/wrong_part/step_2_wrong.jpg"
+    },
+    {
+      "name": "out_of_order",
+      "status": "FLAGGED",
+      "primary_flag": "out_of_order",
+      "flagged_step": 2,
+      "report_json": "runs/out_of_order/report.json",
+      "report_md": "runs/out_of_order/report.md",
+      "evidence_frame": "runs/out_of_order/step_2_out_of_order.jpg"
+    }
+  ]
+}

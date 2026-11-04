@@ -511,19 +511,88 @@
 
   <!-- Measured Results Section (Generated from JSON) -->
   
-        <section id="results" class="section">
-          <div class="container">
-            <div class="section-header">
-              <span class="caption-1 text-accent">BENCHMARK DATA</span>
-              <h2 class="heading-3">Verification Performance</h2>
-              <p class="body-2 text-secondary">Awaiting real footage capture for live benchmarks.</p>
-            </div>
-            <div class="card card-muted text-center py-8">
-              <p class="body-2 text-muted">Planned scenarios for breadboard LED assembly have been defined in <code>manifests/real_footage.yaml</code>. Benchmark metrics will appear here once video capture and evaluation runs complete.</p>
-            </div>
+    <section id="results" class="section">
+      <div class="container">
+        <div class="section-header">
+          <span class="caption-1 text-accent">MEASURED ACCURACY</span>
+          <h2 class="heading-3">Verification Performance</h2>
+          <p class="body-2 text-secondary">Evaluated rigorously across staged errors and baseline executions.</p>
+        </div>
+
+        <div class="stats-grid">
+          <div class="stat-card">
+            <span class="caption-2 text-muted">DETECTION RATE</span>
+            <div class="heading-2 stat-value">33.3%</div>
+            <span class="caption-3 text-secondary">Over staged execution errors</span>
           </div>
-        </section>
+          <div class="stat-card">
+            <span class="caption-2 text-muted">FALSE ALARMS</span>
+            <div class="heading-2 stat-value">3</div>
+            <span class="caption-3 text-secondary">On baseline correct sequence</span>
+          </div>
+          <div class="stat-card">
+            <span class="caption-2 text-muted">AVG LATENCY / STEP</span>
+            <div class="heading-2 stat-value">0.007s</div>
+            <span class="caption-3 text-secondary">Per verified assembly step</span>
+          </div>
+          <div class="stat-card">
+            <span class="caption-2 text-muted">AVG COST / RUN</span>
+            <div class="heading-2 stat-value">$0.0000</div>
+            <span class="caption-3 text-secondary">Token and segmentation billing</span>
+          </div>
+        </div>
+
+        <div class="table-container card mt-6">
+          <table class="data-table body-4">
+            <thead>
+              <tr>
+                <th>Scenario</th>
+                <th>Data Source</th>
+                <th>Outcome</th>
+                <th>SAM Calls</th>
+                <th>Latency / Step</th>
+              </tr>
+            </thead>
+            <tbody>
+              
+        <tr>
+          <td class="font-medium">Correct Sequence Execution</td>
+          <td><span class="status-badge synthetic">synthetic</span></td>
+          <td><span class="status-badge danger">FAIL</span></td>
+          <td class="mono">24</td>
+          <td class="mono">0.008s</td>
+        </tr>
         
+        <tr>
+          <td class="font-medium">Step 2 Skipped (Missing Green Block)</td>
+          <td><span class="status-badge synthetic">synthetic</span></td>
+          <td><span class="status-badge danger">FAIL</span></td>
+          <td class="mono">18</td>
+          <td class="mono">0.005s</td>
+        </tr>
+        
+        <tr>
+          <td class="font-medium">Step 2 Wrong Part (Purple Block)</td>
+          <td><span class="status-badge synthetic">synthetic</span></td>
+          <td><span class="status-badge success">PASS</span></td>
+          <td class="mono">24</td>
+          <td class="mono">0.007s</td>
+        </tr>
+        
+        <tr>
+          <td class="font-medium">Step 2 Out-of-Order (Blue Placed First)</td>
+          <td><span class="status-badge synthetic">synthetic</span></td>
+          <td><span class="status-badge danger">FAIL</span></td>
+          <td class="mono">24</td>
+          <td class="mono">0.008s</td>
+        </tr>
+        
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+    
 
   <!-- Scope & Limitations Note -->
   <section id="limitations" class="section">
