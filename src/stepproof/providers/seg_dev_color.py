@@ -33,7 +33,7 @@ def load_color_config(config_path: str | Path = "config/colors.yaml") -> dict[st
 
 class SegDevColorProvider(SegmentationProvider):
     """HSV color-range segmenter for dev testing on real footage.
-    
+
     Marked strictly as a Dev stand-in (meta_compliant=False).
     """
 

@@ -13,6 +13,7 @@ from stepproof.calibration import get_object_thresholds, load_calibration_config
 from stepproof.ingest.sampler import FrameInfo
 from stepproof.providers.base import LLMProvider, SegmentationProvider
 from stepproof.schemas import SOP, Evidence, FlagType, Step, StepState, StepVerdict
+from stepproof.windows import load_step_windows
 
 logger = logging.getLogger(__name__)
 
@@ -168,6 +169,7 @@ class StepChecker:
         max_dropout_frames: int = 1,
         motion_threshold: float = 0.005,
         calibration_cfg: dict | None = None,
+        windows_path: Path | str = "data/sop/windows.yaml",
         out_dir: Path | str | None = None,
     ):
         self.sop = sop
@@ -177,6 +179,7 @@ class StepChecker:
         self.max_dropout_frames = max_dropout_frames
         self.motion_threshold = motion_threshold
         self.calibration_cfg = calibration_cfg or load_calibration_config()
+        self.windows_map = load_step_windows(windows_path)
         self.out_dir = Path(out_dir) if out_dir else None
         self.trackers: list[StepTrackingState] = [StepTrackingState(s) for s in sop.steps]
         self.sam_call_count = 0

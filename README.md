@@ -141,11 +141,15 @@ StepProof implements a rigorous step state machine. Each step receives a primary
 
 ---
 
-##  Meta Model API & SAM 3.1 Integration
+## 🏆 Meta Model API & SAM 3.1 Integration
 
-StepProof officially integrates with Meta's developer platform (`https://api.meta.ai/v1`).
+> [!IMPORTANT]
+> **Meta Model Run Status**: *Meta model run pending.*  
+> Currently verified and tested with Dev stand-in (Groq Llama / OpenCV mock). Final live Meta model runs are generated strictly through run manifests evaluated with `STEPPROOF_REQUIRE_META=1`.
 
-### Verified Meta Model IDs
+StepProof supports direct integration with Meta's developer platform (`https://api.meta.ai/v1`).
+
+### Meta Model IDs (Planned & Configured)
 - **Multimodal LLM / VLM**:
   - `muse-wonder-1.0` (Primary reasoning / verification model)
   - `muse-spark-1.3` (Fast agentic model)
@@ -225,7 +229,10 @@ Outputs an executive summary table and generates `eval_report.md`:
 
 Template manifest for custom real footage is available at `manifests/real_footage_template.yaml`.
 
-#### Latest Benchmark Results (`eval_report.md`)
+#### Latest Synthetic Benchmark Results (`eval_report.md` - Synthetic Data)
+
+> [!NOTE]
+> **Data source**: `synthetic` (Colored block assembly simulation). Provenance: `⚪ Dev stand-in (mock)`. Meta model evaluation on real breadboard footage is pending live run execution.
 
 | Metric | Measured Value | Benchmark Target | Status |
 | :--- | :--- | :--- | :--- |

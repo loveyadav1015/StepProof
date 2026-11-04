@@ -12,16 +12,22 @@ from stepproof.ingest.sampler import FrameInfo, SampledVideo
 from stepproof.provenance import ProvenanceRecord
 from stepproof.providers.base import SegmentationProvider
 from stepproof.schemas import SOP, Evidence, Step
+from stepproof.windows import load_step_windows
 
 logger = logging.getLogger(__name__)
 
 
-def find_step_keyframe(step: Step, frames: list[FrameInfo]) -> FrameInfo:
-    """Select keyframe closest to step's expected end timestamp."""
+def find_step_keyframe(step: Step, frames: list[FrameInfo], windows_map: dict | None = None) -> FrameInfo:
+    """Select keyframe closest to step's expected end timestamp or loaded timing window."""
     if not frames:
         raise ValueError("Cannot select keyframe from empty frame list")
 
-    target_t = step.end_s if step.end_s > 0 else step.start_s
+    win = (windows_map or {}).get(step.id, {})
+    if "end_s" in win:
+        target_t = win["end_s"]
+    else:
+        target_t = step.end_s if step.end_s > 0 else step.start_s
+
     best_frame = frames[0]
     min_delta = abs(frames[0].timestamp_s - target_t)
 
@@ -39,6 +45,7 @@ def ground_step_objects(
     sampled_video: SampledVideo,
     segmenter: SegmentationProvider,
     output_dir: Path | str,
+    windows_path: Path | str = "data/sop/windows.yaml",
 ) -> tuple[dict[int | str, list[Evidence]], ProvenanceRecord]:
     """Segment and ground physical objects for each step in the SOP on expert keyframes.
 
@@ -56,9 +63,10 @@ def ground_step_objects(
 
     grounded_evidence: dict[int | str, list[Evidence]] = {}
     prov = segmenter.get_provenance()
+    windows_map = load_step_windows(windows_path)
 
     for step in sop.steps:
-        keyframe = find_step_keyframe(step, sampled_video.frames)
+        keyframe = find_step_keyframe(step, sampled_video.frames, windows_map)
         img = cv2.imread(keyframe.file_path)
         if img is None:
             logger.warning("Could not load keyframe image at %s", keyframe.file_path)

@@ -5,7 +5,19 @@ PYTEST = $(VENV)/bin/pytest
 RUFF = $(VENV)/bin/ruff
 STREAMLIT = $(VENV)/bin/streamlit
 
-.PHONY: all install test lint app demo demo-cached final clean help
+.PHONY: all install test lint app demo demo-cached final clean help secrets-check meta-smoke meta-eval
+
+secrets-check:
+	$(PYTHON) scripts/check_secrets.py
+
+meta-smoke:
+	@echo "Running Meta API & SAM smoke tests with MAX_COST_USD=0.50..."
+	@MAX_COST_USD=0.50 $(PYTHON) scripts/smoke_meta.py
+	@MAX_COST_USD=0.50 $(PYTHON) scripts/smoke_sam.py
+
+meta-eval:
+	@echo "Checking Meta eval execution prerequisites..."
+	@$(PYTHON) scripts/meta_eval.py manifests/real_footage.yaml $(CONFIRM)
 
 help:
 	@echo "StepProof - Industrial Video SOP & Execution Verification"

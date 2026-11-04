@@ -49,6 +49,7 @@ def cmd_calibrate_colors(args: argparse.Namespace) -> int:
     """Inspect frame and suggest/tune HSV color ranges for objects."""
     import cv2
     import numpy as np
+
     from stepproof.providers.seg_dev_color import load_color_config
 
     frame_path = Path(args.frame)
@@ -70,7 +71,7 @@ def cmd_calibrate_colors(args: argparse.Namespace) -> int:
     if not cfg:
         print("No objects configured in config/colors.yaml.")
     else:
-        print(f"Configured objects in config/colors.yaml:")
+        print("Configured objects in config/colors.yaml:")
         for obj, data in cfg.items():
             ranges = data.get("ranges", [])
             print(f"- {obj}: {len(ranges)} range(s), min_area={data.get('min_area_px', 100)}px")
@@ -369,16 +370,83 @@ def cmd_eval(args: argparse.Namespace) -> int:
     """Run batch verification evaluation against a manifest."""
     manifest_path = Path(args.manifest)
     out_report = args.out or "eval_report.md"
+    expect_status = getattr(args, "expect_status", None)
 
     try:
         run_evaluation(
             manifest_path=manifest_path,
             output_report_path=out_report,
             require_meta=args.require_meta,
+            expect_status=expect_status,
         )
         return 0
     except Exception as e:
         logger.error("Evaluation failed: %s", e)
+        return 1
+
+
+def cmd_doctor(args: argparse.Namespace) -> int:
+    """Run video quality diagnostic on all manifest videos."""
+    from stepproof.doctor import run_doctor
+    try:
+        run_doctor(args.manifest)
+        return 0
+    except Exception as e:
+        logger.error("Doctor diagnostic failed: %s", e)
+        return 1
+
+
+def cmd_inspect(args: argparse.Namespace) -> int:
+    """Inspect video frames, write CSV evidence log and visual timeline."""
+    from stepproof.inspector import inspect_video_for_tuning
+    video_path = Path(args.video)
+    sop_path = Path(args.sop)
+    out_dir = Path(args.out)
+
+    if not sop_path.exists():
+        logger.error("SOP not found: %s", sop_path)
+        return 1
+
+    sop = SOP.model_validate_json(sop_path.read_text(encoding="utf-8"))
+    seg = get_seg_provider(settings.stepproof_seg, require_meta=args.require_meta)
+
+    try:
+        inspect_video_for_tuning(
+            video_path=video_path,
+            sop=sop,
+            segmenter=seg,
+            out_dir=out_dir,
+        )
+        return 0
+    except Exception as e:
+        logger.error("Inspect failed: %s", e)
+        return 1
+
+
+def cmd_windows(args: argparse.Namespace) -> int:
+    """Propose step timing windows from video evidence."""
+    from stepproof.windows import propose_step_windows
+    video_path = Path(args.video)
+    sop_path = Path(args.sop)
+    out_file = Path(args.out) if getattr(args, "out", None) else Path("data/sop/windows.yaml")
+
+    if not sop_path.exists():
+        logger.error("SOP not found: %s", sop_path)
+        return 1
+
+    sop = SOP.model_validate_json(sop_path.read_text(encoding="utf-8"))
+    seg = get_seg_provider(settings.stepproof_seg, require_meta=args.require_meta)
+
+    try:
+        propose_step_windows(
+            video_path=video_path,
+            sop=sop,
+            segmenter=seg,
+            output_path=out_file,
+        )
+        return 0
+    except Exception as e:
+        logger.error("Windows proposal failed: %s", e)
         return 1
 
 
@@ -432,7 +500,26 @@ def build_parser() -> argparse.ArgumentParser:
     p_eval = subparsers.add_parser("eval", help="Run batch evaluation against manifest")
     p_eval.add_argument("manifest", help="Path to manifest YAML file")
     p_eval.add_argument("--out", default="eval_report.md", help="Output path for evaluation report")
+    p_eval.add_argument("--expect-status", default=None, help="Expected video status (e.g. ready)")
     p_eval.add_argument("--require-meta", action="store_true", help="Enforce Meta compliance guard")
+
+    # doctor
+    p_doc = subparsers.add_parser("doctor", help="Inspect manifest videos for duration, exposure, shake")
+    p_doc.add_argument("manifest", help="Path to manifest YAML file")
+
+    # inspect
+    p_insp = subparsers.add_parser("inspect", help="Detailed segmentation inspect and tuning timeline")
+    p_insp.add_argument("video", help="Path to video file")
+    p_insp.add_argument("--sop", required=True, help="Path to golden sop.json")
+    p_insp.add_argument("--out", default="data/outputs/inspect", help="Output directory")
+    p_insp.add_argument("--require-meta", action="store_true", help="Enforce Meta compliance guard")
+
+    # windows
+    p_win = subparsers.add_parser("windows", help="Propose step timing windows from video")
+    p_win.add_argument("video", help="Path to demonstration video")
+    p_win.add_argument("--sop", required=True, help="Path to golden sop.json")
+    p_win.add_argument("--out", default="data/sop/windows.yaml", help="Output windows.yaml path")
+    p_win.add_argument("--require-meta", action="store_true", help="Enforce Meta compliance guard")
 
     # report
     p_report = subparsers.add_parser("report", help="Export or display Markdown report")
@@ -459,6 +546,9 @@ def main() -> int:
         "check": cmd_check,
         "calibrate": cmd_calibrate,
         "eval": cmd_eval,
+        "doctor": cmd_doctor,
+        "inspect": cmd_inspect,
+        "windows": cmd_windows,
         "report": cmd_report,
         "replay": cmd_replay,
     }

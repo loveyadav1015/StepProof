@@ -104,7 +104,8 @@ tab0, tab1, tab2, tab3 = st.tabs(["🎥 Live Demo", "📋 Build SOP", "🔍 Chec
 # ==============================================================================
 with tab0:
     st.header("🎯 StepProof: End-to-End Visual Demo")
-    st.info("Demonstrating video SOP extraction, golden procedure alignment, and live error detection.")
+    st.warning("⚠️ **Synthetic data** | Provenance: ⚪ *Dev stand-in (Mock / Dev models)*. No Meta model or real footage claims.")
+    st.info("Demonstrating video SOP extraction, golden procedure alignment, and live error detection on synthetic block assembly.")
 
     # 1. Expert Video
     st.markdown("### 1. Expert Demonstration")

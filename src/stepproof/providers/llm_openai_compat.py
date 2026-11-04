@@ -427,6 +427,7 @@ class LLMOpenAICompatProvider(LLMProvider):
             ]
         else:
             prompt_version = "judge_image_v1"
+            _ = prompt_version
             b64_jpeg = _image_to_base64_jpeg(frame)
             judge_prompt = (
                 f"Step Specification:\n"

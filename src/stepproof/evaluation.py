@@ -36,6 +36,7 @@ def run_evaluation(
     manifest_path: Path | str,
     output_report_path: Path | str = "eval_report.md",
     require_meta: bool = False,
+    expect_status: str | None = None,
 ) -> dict[str, Any]:
     """Execute evaluation across all runs listed in manifest and write report."""
     manifest = load_manifest(manifest_path)
@@ -54,12 +55,16 @@ def run_evaluation(
     total_steps_evaluated = 0
     total_time_seconds = 0.0
     total_estimated_cost = 0.0
+    not_run_count = 0
 
     runs = manifest["runs"]
     print("\n" + "=" * 70)
     print(f"STEPPROOF EVALUATION: {suite_name}")
     print(f"SOP: {sop.task} ({len(sop.steps)} steps) | Manifest: {manifest_path}")
     print("=" * 70)
+
+    seg = get_seg_provider(settings.stepproof_seg, require_meta=require_meta)
+    llm = get_llm_provider(settings.stepproof_llm, require_meta=require_meta)
 
     for run_info in runs:
         scenario = run_info["scenario"]
@@ -72,8 +77,24 @@ def run_evaluation(
             for k, v in run_info.get("expected_primary_flag_types", {}).items()
         }
 
-        if not video_path.exists():
-            print(f"⚠️  [{status_label.upper()}] Video file not found: {video_path}. Skipping.")
+        # Check if file is missing or status doesn't match expected status
+        if not video_path.exists() or (expect_status and status_label != expect_status):
+            not_run_count += 1
+            print(f"⚠️  [NOT RUN - {status_label.upper()}] Video file not found: {video_path}")
+            results.append({
+                "scenario": scenario,
+                "source": source_label,
+                "status": "NOT RUN",
+                "expected_ids": list(expected_ids),
+                "observed_ids": [],
+                "expected_flags": expected_flags,
+                "observed_flags": {},
+                "elapsed_s": 0.0,
+                "latency_per_step_s": 0.0,
+                "cost_usd": 0.0,
+                "sam_calls": 0,
+                "judge_calls": 0,
+            })
             continue
 
         frames_dir = Path("data/outputs/eval_frames") / video_path.stem
@@ -232,20 +253,37 @@ def generate_eval_markdown_report(
 ) -> str:
     """Generate professional Markdown evaluation report."""
     rows = []
+    confusion_rows = []
     for r in results:
-        status_icon = "PASS" if r["status"] == "PASS" else "**FAIL**"
+        status_val = r["status"]
+        if status_val == "PASS":
+            status_icon = "✅ PASS"
+        elif status_val == "NOT RUN":
+            status_icon = "⚠️ NOT RUN"
+        else:
+            status_icon = "❌ **FAIL**"
+
         exp_str = f"Steps {r['expected_ids']}" if r["expected_ids"] else "None"
         obs_str = f"Steps {r['observed_ids']}" if r["observed_ids"] else "None"
         flags_str = ", ".join(f"{k}:{v}" for k, v in r["observed_flags"].items()) or "none"
+        exp_flags_str = ", ".join(f"{k}:{v}" for k, v in r.get("expected_flags", {}).items()) or "none"
         source_badge = f"`{r.get('source', 'real')}`"
         sam_str = f"{r.get('sam_calls', 0)}"
+
         rows.append(
             f"| {r['scenario']} | {source_badge} | {status_icon} | {exp_str} | {obs_str} | `{flags_str}` | {sam_str} | {r['latency_per_step_s']:.3f}s | ${r['cost_usd']:.6f} |"
         )
+        confusion_rows.append(
+            f"| {r['scenario']} | {exp_str} | `{exp_flags_str}` | {obs_str} | `{flags_str}` | {status_icon} |"
+        )
 
     table_rows = "\n".join(rows)
+    confusion_table_rows = "\n".join(confusion_rows)
 
     return f"""# StepProof Evaluation Report: {suite_name}
+
+> [!NOTE]
+> **Provenance & Compliance**: Dev stand-in, not a Meta result (unless verified under `STEPPROOF_REQUIRE_META=1` with official Meta models).
 
 **Task:** {sop.task}
 **SOP Step Count:** {len(sop.steps)}
@@ -266,7 +304,13 @@ def generate_eval_markdown_report(
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
 {table_rows}
 
-## 3. Analysis and Recommendations
+## 3. Confusion Matrix: Expected vs Observed Flags
+
+| Scenario Name | Expected Steps | Expected Types | Observed Steps | Observed Types | Outcome |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+{confusion_table_rows}
+
+## 4. Analysis and Recommendations
 
 - **Out of Order vs Skipped**: The state machine maintains active evaluation across all steps so that steps completed out of sequence are distinguished cleanly from steps never attempted.
 - **Wrong Part Recognition**: Intruder objects and common error candidates are checked against reference object bounds and rule checks, preventing misclassification.

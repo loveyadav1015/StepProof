@@ -13,19 +13,19 @@ llama-3.3-70b-versatile:
   free_tier: true
 
 # Meta hosted reference models
-# verify in dashboard
+# provisional - verify in Meta dashboard before live use
 muse-wonder-1.0:
-  input_per_m: 4.00   # verify in dashboard: $4.00 per 1M input tokens
-  output_per_m: 20.00 # verify in dashboard: $20.00 per 1M output tokens
+  input_per_m: 4.00   # provisional - verify in Meta dashboard before live use: $4.00 per 1M input tokens
+  output_per_m: 20.00 # provisional - verify in Meta dashboard before live use: $20.00 per 1M output tokens
 
-# verify in dashboard
+# provisional - verify in Meta dashboard before live use
 muse-spark:
-  input_per_m: 1.25   # verify in dashboard: $1.25 per 1M input tokens (provisional based on 1.1)
-  output_per_m: 4.25  # verify in dashboard: $4.25 per 1M output tokens (provisional based on 1.1)
+  input_per_m: 1.25   # provisional - verify in Meta dashboard before live use: $1.25 per 1M input tokens (provisional based on 1.1)
+  output_per_m: 4.25  # provisional - verify in Meta dashboard before live use: $4.25 per 1M output tokens (provisional based on 1.1)
 
 muse-spark-1.3:
-  input_per_m: 1.25   # verify in dashboard
-  output_per_m: 4.25  # verify in dashboard
+  input_per_m: 1.25   # provisional - verify in Meta dashboard before live use
+  output_per_m: 4.25  # provisional - verify in Meta dashboard before live use
 
 # OpenRouter reference for open weights
 meta/muse-glimmer-30b:
@@ -33,7 +33,7 @@ meta/muse-glimmer-30b:
   output_per_m: 1.20
 
 # SAM 3.1 is billed per image or frame, NOT per token
-# verify in dashboard
+# provisional - verify in Meta dashboard before live use
 sam-3.1:
-  per_1k_images: 2.50       # verify in dashboard: $2.50 per 1,000 images ($0.0025 per image)
-  per_1k_video_frames: 0.20 # verify in dashboard: $0.20 per 1,000 video frames ($0.0002 per frame)
+  per_1k_images: 2.50       # provisional - verify in Meta dashboard before live use: $2.50 per 1,000 images ($0.0025 per image)
+  per_1k_video_frames: 0.20 # provisional - verify in Meta dashboard before live use: $0.20 per 1,000 video frames ($0.0002 per frame)

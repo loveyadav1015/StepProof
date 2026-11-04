@@ -237,9 +237,10 @@ def test_llm_cost_budget_guard_with_nonzero_prices(monkeypatch):
 def test_llm_text_only_groq_judge_and_refusal(monkeypatch):
     """Test text-only Groq Llama judge mode and strict Meta compliance refusal."""
     from unittest.mock import MagicMock
-    from stepproof.providers.llm_openai_compat import LLMOpenAICompatProvider
+
     from stepproof.providers.factory import get_llm_provider
-    from stepproof.schemas import Step, Check, Evidence
+    from stepproof.providers.llm_openai_compat import LLMOpenAICompatProvider
+    from stepproof.schemas import Check, Evidence, Step
 
     # Groq provider configuration
     provider = LLMOpenAICompatProvider(
