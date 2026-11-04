@@ -17,13 +17,34 @@ def test_tokens_css_exists_and_has_variables():
 
 
 def test_streamlit_config_toml():
-    """Verify .streamlit/config.toml theme matches tokens.css."""
+    """Verify .streamlit/config.toml theme matches tokens.css and configures CORS."""
     config_path = Path(".streamlit/config.toml")
     assert config_path.exists()
     content = config_path.read_text(encoding="utf-8")
     assert "primaryColor" in content
     assert "#3B82F6" in content
     assert "#0A0A0A" in content
+    assert "enableCORS = true" in content
+    assert "corsAllowedOrigins" in content
+
+
+def test_serve_site_cors_handler(tmp_path: Path):
+    """Verify scripts/serve_site.py CORSRequestHandler emits Access-Control-Allow-Origin."""
+    import io
+    from unittest.mock import MagicMock
+
+    from scripts.serve_site import CORSRequestHandler
+
+    handler = CORSRequestHandler.__new__(CORSRequestHandler)
+    handler.request_version = "HTTP/1.1"
+    handler.wfile = io.BytesIO()
+    headers_sent = {}
+    handler.send_header = MagicMock(side_effect=lambda k, v: headers_sent.update({k: v}))
+    handler._headers_buffer = []
+
+    CORSRequestHandler.end_headers(handler)
+    assert headers_sent.get("Access-Control-Allow-Origin") == "*"
+    assert "GET, HEAD, OPTIONS" in headers_sent.get("Access-Control-Allow-Methods", "")
 
 
 def test_build_site_script():

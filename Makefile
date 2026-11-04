@@ -15,8 +15,8 @@ site:
 	$(PYTHON) scripts/build_site.py
 
 site-serve: site
-	@echo "Serving static documentation site at http://localhost:8000..."
-	cd docs/site && $(PYTHON) -m http.server 8000
+	@echo "Serving static documentation site with CORS at http://localhost:8000..."
+	$(PYTHON) scripts/serve_site.py --dir docs/site --port 8000
 
 meta-smoke:
 	@echo "Running Meta API & SAM smoke tests with MAX_COST_USD=0.50..."
