@@ -236,6 +236,8 @@ Template manifest for custom real footage is available at `manifests/real_footag
 
 #### Latest Synthetic Benchmark Results (`eval_report.md` - Synthetic Data)
 
+--- 
+
 > [!NOTE]
 > **Data source**: `synthetic` (Colored block assembly simulation). Provenance: `⚪ Dev stand-in (mock)`. Meta model evaluation on real breadboard footage is pending live run execution.
 
